@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lukona Secondary School Portal</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f0fb}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes slideIn{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-thumb{background:#e2e0f5;border-radius:3px}
+    select,input,textarea,button{font-family:inherit}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── Utilities & Validation ────────────────────────────────────────────────────
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// ── Error Boundary ────────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error, info) { console.error("App error:", error, info); }
+  render() {
+    if (this.state.hasError) return (
+      React.createElement('div', { style: { minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f1f0fb", padding:20 } },
+        React.createElement('div', { style: { background:"#fff", borderRadius:16, padding:32, maxWidth:400, textAlign:"center", boxShadow:"0 4px 24px rgba(0,0,0,0.1)" } },
+          React.createElement('div', { style: { fontSize:48, marginBottom:16 } }, "⚠️"),
+          React.createElement('h2', { style: { color:"#2d2b4e", marginBottom:8 } }, "Something went wrong"),
+          React.createElement('p', { style: { color:"#6b6899", fontSize:14, marginBottom:20 } }, "The portal encountered an error. Please refresh the page."),
+          React.createElement('button', { onClick: () => window.location.reload(), style: { background:"#3C3489", color:"#fff", border:"none", borderRadius:8, padding:"10px 24px", fontSize:14, fontWeight:600, cursor:"pointer" } }, "Refresh Page")
+        )
+      )
+    );
+    return this.props.children;
+  }
+}
+
+
+// ── Palette & Design Tokens ──────────────────────────────────────────────────
+const C = {
+  purple: "#3C3489",
+  purpleLight: "#5048b8",
+  purpleDark: "#2a255f",
+  purpleFade: "#eeedf9",
+  purpleMid: "#6c65c8",
+  white: "#ffffff",
+  gray50: "#f8f7ff",
+  gray100: "#f1f0fb",
+  gray200: "#e2e0f5",
+  gray400: "#9b97cc",
+  gray600: "#6b6899",
+  gray800: "#2d2b4e",
+  green: "#22c55e",
+  greenBg: "#dcfce7",
+  yellow: "#f59e0b",
+  yellowBg: "#fef3c7",
+  red: "#ef4444",
+  redBg: "#fee2e2",
+  blue: "#3b82f6",
+  blueBg: "#dbeafe",
+};
+
+// ── Seed Database ────────────────────────────────────────────────────────────
+const SEED = {
+  users: [
+    { id: 1, name: "Admin User",     email: "admin@school.com",   password: "admin123",   role: "admin"   },
+    { id: 2, name: "Mr. John Banda", email: "teacher@school.com", password: "teacher123", role: "teacher" },
+    { id: 3, name: "Ms. Sarah Zulu", email: "teacher2@school.com",password: "teacher123", role: "teacher" },
+    { id: 4, name: "Alice Mwansa",   email: "student@school.com", password: "student123", role: "student" },
+    { id: 5, name: "Brian Tembo",    email: "student2@school.com",password: "student123", role: "student" },
+    { id: 6, name: "Chanda Phiri",   email: "student3@school.com",password: "student123", role: "student" },
+  ],
+  students: [
+    { id: 1, user_id: 4, grade: "Grade 10", gender: "Female", dob: "2009-03-14", parent_name: "Mary Mwansa",   parent_phone: "+260 977 100 001" },
+    { id: 2, user_id: 5, grade: "Grade 11", gender: "Male",   dob: "2008-07-22", parent_name: "James Tembo",   parent_phone: "+260 977 100 002" },
+    { id: 3, user_id: 6, grade: "Grade 10", gender: "Female", dob: "2009-11-05", parent_name: "Elisa Phiri",   parent_phone: "+260 977 100 003" },
+  ],
+  teachers: [
+    { id: 1, user_id: 2, subject: "Mathematics" },
+    { id: 2, user_id: 3, subject: "English"     },
+  ],
+  subjects: [
+    { id: 1, name: "Mathematics",  grade: "Grade 10", teacher_id: 1 },
+    { id: 2, name: "English",      grade: "Grade 10", teacher_id: 2 },
+    { id: 3, name: "Science",      grade: "Grade 10", teacher_id: 1 },
+    { id: 4, name: "History",      grade: "Grade 11", teacher_id: 2 },
+    { id: 5, name: "Geography",    grade: "Grade 11", teacher_id: 1 },
+  ],
+  timetable: [
+    { id: 1, day: "Monday",    period: 1, start_time: "07:30", end_time: "08:30", subject_id: 1, room: "A1", grade: "Grade 10" },
+    { id: 2, day: "Monday",    period: 2, start_time: "08:30", end_time: "09:30", subject_id: 2, room: "A2", grade: "Grade 10" },
+    { id: 3, day: "Tuesday",   period: 1, start_time: "07:30", end_time: "08:30", subject_id: 3, room: "Lab", grade: "Grade 10" },
+    { id: 4, day: "Tuesday",   period: 2, start_time: "08:30", end_time: "09:30", subject_id: 4, room: "B1", grade: "Grade 11" },
+    { id: 5, day: "Wednesday", period: 1, start_time: "07:30", end_time: "08:30", subject_id: 5, room: "B2", grade: "Grade 11" },
+    { id: 6, day: "Wednesday", period: 2, start_time: "08:30", end_time: "09:30", subject_id: 1, room: "A1", grade: "Grade 10" },
+    { id: 7, day: "Thursday",  period: 1, start_time: "07:30", end_time: "08:30", subject_id: 2, room: "A2", grade: "Grade 10" },
+    { id: 8, day: "Friday",    period: 1, start_time: "07:30", end_time: "08:30", subject_id: 3, room: "Lab", grade: "Grade 10" },
+    { id: 9, day: "Friday",    period: 2, start_time: "08:30", end_time: "09:30", subject_id: 4, room: "B1", grade: "Grade 11" },
+  ],
+  assignments: [
+    { id: 1, title: "Algebra Chapter 3",    subject_id: 1, description: "Complete exercises 3.1 to 3.5", assigned_date: "2026-06-01", due_date: "2026-06-15", statuses: { 1: "Submitted", 2: "In Progress", 3: "Not Started" } },
+    { id: 2, title: "Essay: Climate Change",subject_id: 2, description: "Write a 500-word essay",        assigned_date: "2026-06-05", due_date: "2026-06-20", statuses: { 1: "In Progress", 2: "Not Started", 3: "Not Started" } },
+    { id: 3, title: "Lab Report: Osmosis",  subject_id: 3, description: "Submit lab findings report",   assigned_date: "2026-06-08", due_date: "2026-06-18", statuses: { 1: "Not Started", 2: "Not Started", 3: "Submitted" } },
+  ],
+  results: [
+    { id: 1, student_id: 1, subject_id: 1, term: "Term 1", year: 2026, mark: 78 },
+    { id: 2, student_id: 1, subject_id: 2, term: "Term 1", year: 2026, mark: 85 },
+    { id: 3, student_id: 1, subject_id: 3, term: "Term 1", year: 2026, mark: 72 },
+    { id: 4, student_id: 2, subject_id: 1, term: "Term 1", year: 2026, mark: 90 },
+    { id: 5, student_id: 2, subject_id: 4, term: "Term 1", year: 2026, mark: 65 },
+    { id: 6, student_id: 3, subject_id: 1, term: "Term 1", year: 2026, mark: 88 },
+    { id: 7, student_id: 3, subject_id: 2, term: "Term 1", year: 2026, mark: 76 },
+  ],
+  attendance: [
+    { id: 1, student_id: 1, date: "2026-06-10", status: "Present", reason: "" },
+    { id: 2, student_id: 1, date: "2026-06-11", status: "Present", reason: "" },
+    { id: 3, student_id: 1, date: "2026-06-12", status: "Late",    reason: "Transport delay" },
+    { id: 4, student_id: 2, date: "2026-06-10", status: "Present", reason: "" },
+    { id: 5, student_id: 2, date: "2026-06-11", status: "Absent",  reason: "Sick" },
+    { id: 6, student_id: 3, date: "2026-06-10", status: "Present", reason: "" },
+    { id: 7, student_id: 3, date: "2026-06-11", status: "Present", reason: "" },
+    { id: 8, student_id: 3, date: "2026-06-12", status: "Present", reason: "" },
+  ],
+  notices: [
+    { id: 1, title: "End of Term Exams", body: "Final examinations will begin on 25th June. All students must report by 07:00.", posted_by: 1, date_posted: "2026-06-10", audience: "all" },
+    { id: 2, title: "Sports Day",        body: "Annual Sports Day is scheduled for 20th June. Students are encouraged to participate.", posted_by: 1, date_posted: "2026-06-08", audience: "all" },
+    { id: 3, title: "Fee Reminder",      body: "Second term fees are due by 30th June. Contact the bursar's office for payment arrangements.", posted_by: 1, date_posted: "2026-06-05", audience: "students" },
+  ],
+  fees: [
+    { id: 1, student_id: 1, term: "Term 1", amount_due: 2500, amount_paid: 2500, due_date: "2026-03-31" },
+    { id: 2, student_id: 1, term: "Term 2", amount_due: 2500, amount_paid: 1000, due_date: "2026-06-30" },
+    { id: 3, student_id: 2, term: "Term 1", amount_due: 2500, amount_paid: 2500, due_date: "2026-03-31" },
+    { id: 4, student_id: 2, term: "Term 2", amount_due: 2500, amount_paid: 2500, due_date: "2026-06-30" },
+    { id: 5, student_id: 3, term: "Term 1", amount_due: 2500, amount_paid: 1500, due_date: "2026-03-31" },
+    { id: 6, student_id: 3, term: "Term 2", amount_due: 2500, amount_paid:    0, due_date: "2026-06-30" },
+  ],
+  messages: [
+    { id: 1, sender_id: 4, receiver_id: 2, subject: "Math homework question", body: "Good day Mr. Banda. I'm confused about exercise 3.3. Could you explain how to approach problem 5?", date_sent: "2026-06-11T09:30:00", read: true  },
+    { id: 2, sender_id: 2, receiver_id: 4, subject: "Re: Math homework question", body: "Hello Alice. For problem 5, you need to first isolate the variable by dividing both sides. Try that approach and let me know if you still need help.", date_sent: "2026-06-11T14:00:00", read: true  },
+    { id: 3, sender_id: 5, receiver_id: 2, subject: "Absent yesterday", body: "Good morning sir. I was absent on the 11th due to illness. Please may I get the notes from class?", date_sent: "2026-06-12T08:00:00", read: false },
+  ],
+};
+
+// ── DB Layer (localStorage) ──────────────────────────────────────────────────
+function initDB() {
+  if (!localStorage.getItem("lukona_db_v3")) {
+    localStorage.setItem("lukona_db_v3", JSON.stringify(SEED));
+  }
+}
+function getDB() {
+  return JSON.parse(localStorage.getItem("lukona_db_v3") || "{}");
+}
+function saveDB(db) {
+  localStorage.setItem("lukona_db_v3", JSON.stringify(db));
+}
+function nextId(arr) {
+  return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1;
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+function loginUser(email, password) {
+  const db = getDB();
+  const user = db.users.find(u => u.email === email && u.password === password);
+  if (!user) return null;
+  const token = btoa(JSON.stringify({ id: user.id, role: user.role, exp: Date.now() + 86400000 }));
+  localStorage.setItem("lukona_token", token);
+  return user;
+}
+function getSession() {
+  try {
+    const token = localStorage.getItem("lukona_token");
+    if (!token) return null;
+    const payload = JSON.parse(atob(token));
+    if (payload.exp < Date.now()) { localStorage.removeItem("lukona_token"); return null; }
+    const db = getDB();
+    return db.users.find(u => u.id === payload.id) || null;
+  } catch { return null; }
+}
+function logout() {
+  localStorage.removeItem("lukona_token");
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function ToastContainer({ toasts }) {
+  return (
+    <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999, display:"flex", flexDirection:"column", gap:8 }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          background: t.type==="error" ? C.red : t.type==="warn" ? C.yellow : C.purple,
+          color: C.white, padding:"12px 20px", borderRadius:10, fontSize:14, fontWeight:500,
+          boxShadow:"0 4px 20px rgba(0,0,0,0.2)", minWidth:240, maxWidth:320,
+          animation:"slideIn 0.3s ease",
+        }}>
+          {t.msg}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const show = useCallback((msg, type="success") => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
+  }, []);
+  return { toasts, show };
+}
+
+// ── Spinner ───────────────────────────────────────────────────────────────────
+function Spinner() {
+  return (
+    <div style={{ display:"flex", justifyContent:"center", padding:40 }}>
+      <div style={{
+        width:36, height:36, border:`3px solid ${C.gray200}`,
+        borderTop:`3px solid ${C.purple}`, borderRadius:"50%",
+        animation:"spin 0.8s linear infinite",
+      }} />
+    </div>
+  );
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+function Badge({ label, color }) {
+  const map = {
+    green:  { bg: C.greenBg,  fg: "#15803d" },
+    yellow: { bg: C.yellowBg, fg: "#92400e" },
+    red:    { bg: C.redBg,    fg: "#b91c1c" },
+    blue:   { bg: C.blueBg,   fg: "#1d4ed8" },
+    purple: { bg: C.purpleFade, fg: C.purple },
+  };
+  const s = map[color] || map.purple;
+  return (
+    <span style={{
+      background: s.bg, color: s.fg, padding:"2px 10px", borderRadius:20,
+      fontSize:12, fontWeight:600, whiteSpace:"nowrap",
+    }}>{label}</span>
+  );
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children }) {
+  return (
+    <div style={{
+      position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:16,
+    }} onClick={e => e.target===e.currentTarget && onClose()}>
+      <div style={{
+        background:C.white, borderRadius:16, padding:28, width:"100%", maxWidth:520,
+        maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.25)",
+      }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <h3 style={{ margin:0, color:C.gray800, fontSize:18, fontWeight:700 }}>{title}</h3>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:22, color:C.gray400 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+function Input({ label, ...props }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <label style={{ display:"block", fontSize:13, fontWeight:600, color:C.gray600, marginBottom:5 }}>{label}</label>}
+      <input {...props} style={{
+        width:"100%", padding:"10px 14px", border:`1.5px solid ${C.gray200}`,
+        borderRadius:8, fontSize:14, color:C.gray800, outline:"none",
+        background:C.white, boxSizing:"border-box",
+        ...props.style,
+      }} onFocus={e => e.target.style.borderColor=C.purple}
+         onBlur={e => e.target.style.borderColor=C.gray200} />
+    </div>
+  );
+}
+
+function Select({ label, children, ...props }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <label style={{ display:"block", fontSize:13, fontWeight:600, color:C.gray600, marginBottom:5 }}>{label}</label>}
+      <select {...props} style={{
+        width:"100%", padding:"10px 14px", border:`1.5px solid ${C.gray200}`,
+        borderRadius:8, fontSize:14, color:C.gray800, background:C.white,
+        boxSizing:"border-box", cursor:"pointer",
+      }}>
+        {children}
+      </select>
+    </div>
+  );
+}
+
+function Textarea({ label, ...props }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <label style={{ display:"block", fontSize:13, fontWeight:600, color:C.gray600, marginBottom:5 }}>{label}</label>}
+      <textarea {...props} rows={4} style={{
+        width:"100%", padding:"10px 14px", border:`1.5px solid ${C.gray200}`,
+        borderRadius:8, fontSize:14, color:C.gray800, background:C.white,
+        boxSizing:"border-box", resize:"vertical", fontFamily:"inherit",
+      }} />
+    </div>
+  );
+}
+
+function Btn({ children, variant="primary", size="md", ...props }) {
+  const base = {
+    border:"none", borderRadius:8, cursor:"pointer", fontWeight:600,
+    fontSize: size==="sm" ? 13 : 14,
+    padding: size==="sm" ? "6px 14px" : "10px 22px",
+    transition:"opacity 0.15s",
+  };
+  const variants = {
+    primary:  { background:C.purple,  color:C.white },
+    danger:   { background:C.red,     color:C.white },
+    ghost:    { background:C.purpleFade, color:C.purple },
+    outline:  { background:"none", color:C.purple, border:`1.5px solid ${C.purple}` },
+  };
+  return (
+    <button {...props} style={{ ...base, ...variants[variant], ...props.style }}
+      onMouseEnter={e => e.currentTarget.style.opacity="0.85"}
+      onMouseLeave={e => e.currentTarget.style.opacity="1"}>
+      {children}
+    </button>
+  );
+}
+
+// ── Page Header ───────────────────────────────────────────────────────────────
+function PageHeader({ title, subtitle, action }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24, flexWrap:"wrap", gap:12 }}>
+      <div>
+        <h2 style={{ margin:0, color:C.gray800, fontSize:22, fontWeight:800 }}>{title}</h2>
+        {subtitle && <p style={{ margin:"4px 0 0", color:C.gray600, fontSize:14 }}>{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+// ── Card ──────────────────────────────────────────────────────────────────────
+function Card({ children, style }) {
+  return (
+    <div style={{
+      background:C.white, borderRadius:14, padding:20,
+      boxShadow:"0 2px 12px rgba(60,52,137,0.08)",
+      border:`1px solid ${C.gray100}`,
+      ...style,
+    }}>{children}</div>
+  );
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ icon, label, value, color, sub }) {
+  const bg = { green:C.greenBg, yellow:C.yellowBg, red:C.redBg, purple:C.purpleFade }[color]||C.purpleFade;
+  const fg = { green:"#15803d", yellow:"#92400e", red:"#b91c1c", purple:C.purple }[color]||C.purple;
+  return (
+    <Card style={{ display:"flex", alignItems:"center", gap:16 }}>
+      <div style={{ width:52, height:52, borderRadius:14, background:bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize:26, fontWeight:800, color:fg, lineHeight:1 }}>{value}</div>
+        <div style={{ fontSize:13, color:C.gray600, marginTop:3, fontWeight:500 }}>{label}</div>
+        {sub && <div style={{ fontSize:12, color:C.gray400, marginTop:2 }}>{sub}</div>}
+      </div>
+    </Card>
+  );
+}
+
+// ── Login Page ────────────────────────────────────────────────────────────────
+function LoginPage({ onLogin }) {
+  const [screen, setScreen] = useState("login"); // login | forgot | reset | success
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  // Forgot password states
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotErr, setForgotErr] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [secAnswer, setSecAnswer] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [resetErr, setResetErr] = useState("");
+  const [foundUser, setFoundUser] = useState(null);
+
+  function handle(e) {
+    e.preventDefault();
+    if (!email || !pass) { setErr("Please enter both email and password."); return; }
+    if (!isValidEmail(email)) { setErr("Please enter a valid email address."); return; }
+    setLoading(true);
+    setTimeout(() => {
+      const user = loginUser(email, pass);
+      setLoading(false);
+      if (user) onLogin(user);
+      else setErr("Invalid email or password.");
+    }, 600);
+  }
+
+  function handleForgot(e) {
+    e.preventDefault();
+    if (!forgotEmail) { setForgotErr("Please enter your email address."); return; }
+    if (!isValidEmail(forgotEmail)) { setForgotErr("Please enter a valid email address."); return; }
+    setForgotLoading(true);
+    setTimeout(() => {
+      const db = getDB();
+      const user = db.users.find(u => u.email === forgotEmail);
+      setForgotLoading(false);
+      if (!user) { setForgotErr("No account found with that email address."); return; }
+      setFoundUser(user);
+      setScreen("reset");
+    }, 800);
+  }
+
+  function handleReset(e) {
+    e.preventDefault();
+    if (!newPass || !confirmPass) { setResetErr("Please fill in both password fields."); return; }
+    if (newPass !== confirmPass) { setResetErr("Passwords do not match."); return; }
+    if (newPass.length < 6) { setResetErr("Password must be at least 6 characters."); return; }
+    const db = getDB();
+    const user = db.users.find(u => u.id === foundUser.id);
+    if (user) { user.password = newPass; saveDB(db); }
+    setScreen("success");
+  }
+
+  const Logo = () => (
+    <div style={{ textAlign:"center", marginBottom:28 }}>
+      <div style={{
+        width:66, height:66, borderRadius:18, background:`linear-gradient(135deg, ${C.purple}, ${C.purpleMid})`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize:30, margin:"0 auto 12px", color:C.white, fontWeight:900,
+      }}>L</div>
+      <h1 style={{ margin:0, color:C.gray800, fontSize:22, fontWeight:800, letterSpacing:"-0.5px" }}>Lukona Secondary</h1>
+      <p style={{ margin:"5px 0 0", color:C.gray600, fontSize:13 }}>School Management Portal</p>
+    </div>
+  );
+
+  return (
+    <div style={{
+      minHeight:"100vh", background:`linear-gradient(135deg, ${C.purpleDark} 0%, ${C.purple} 50%, ${C.purpleMid} 100%)`,
+      display:"flex", alignItems:"center", justifyContent:"center", padding:16,
+    }}>
+      <div style={{
+        background:C.white, borderRadius:20, padding:"36px 32px", width:"100%", maxWidth:420,
+        boxShadow:"0 24px 80px rgba(0,0,0,0.3)",
+      }}>
+
+        {/* ── LOGIN SCREEN ── */}
+        {screen === "login" && (
+          <>
+            <Logo />
+            <form onSubmit={handle}>
+              <Input label="Email Address" type="email" placeholder="you@school.com" value={email} onChange={e => setEmail(e.target.value)} />
+              <Input label="Password" type="password" placeholder="••••••••" value={pass} onChange={e => setPass(e.target.value)} />
+              {err && <div style={{ background:C.redBg, color:"#b91c1c", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:14 }}>{err}</div>}
+              <Btn style={{ width:"100%", padding:"13px", fontSize:15, marginTop:4 }} disabled={loading}>
+                {loading ? "Signing in…" : "Sign In"}
+              </Btn>
+            </form>
+            <div style={{ textAlign:"center", marginTop:16 }}>
+              <button onClick={() => { setScreen("forgot"); setErr(""); setForgotEmail(""); setForgotErr(""); }} style={{
+                background:"none", border:"none", color:C.purple, fontSize:13,
+                fontWeight:600, cursor:"pointer", textDecoration:"underline",
+              }}>
+                Forgot Password?
+              </button>
+            </div>
+            <div style={{ marginTop:20, padding:"14px", background:C.gray50, borderRadius:10, fontSize:12, color:C.gray600, lineHeight:1.7 }}>
+              <strong style={{ color:C.gray800 }}>Demo accounts:</strong><br/>
+              Admin: admin@school.com / admin123<br/>
+              Teacher: teacher@school.com / teacher123<br/>
+              Student: student@school.com / student123
+            </div>
+          </>
+        )}
+
+        {/* ── FORGOT PASSWORD SCREEN ── */}
+        {screen === "forgot" && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:24 }}>
+              <div style={{ fontSize:44, marginBottom:10 }}>🔐</div>
+              <h2 style={{ margin:0, color:C.gray800, fontSize:20, fontWeight:800 }}>Forgot Password?</h2>
+              <p style={{ margin:"8px 0 0", color:C.gray600, fontSize:13, lineHeight:1.5 }}>
+                Enter your school email address and we will help you reset your password.
+              </p>
+            </div>
+            <form onSubmit={handleForgot}>
+              <Input label="Your School Email" type="email" placeholder="you@school.com" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} />
+              {forgotErr && <div style={{ background:C.redBg, color:"#b91c1c", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:14 }}>{forgotErr}</div>}
+              <Btn style={{ width:"100%", padding:"13px", fontSize:15 }} disabled={forgotLoading}>
+                {forgotLoading ? "Searching…" : "Find My Account"}
+              </Btn>
+            </form>
+            <div style={{ textAlign:"center", marginTop:16 }}>
+              <button onClick={() => setScreen("login")} style={{
+                background:"none", border:"none", color:C.purple, fontSize:13,
+                fontWeight:600, cursor:"pointer",
+              }}>
+                ← Back to Login
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── RESET PASSWORD SCREEN ── */}
+        {screen === "reset" && foundUser && (
+          <>
+            <div style={{ textAlign:"center", marginBottom:24 }}>
+              <div style={{ fontSize:44, marginBottom:10 }}>✏️</div>
+              <h2 style={{ margin:0, color:C.gray800, fontSize:20, fontWeight:800 }}>Reset Password</h2>
+              <p style={{ margin:"8px 0 0", color:C.gray600, fontSize:13 }}>
+                Account found for <strong>{foundUser.email}</strong>
+              </p>
+            </div>
+            <div style={{ background:C.greenBg, color:"#15803d", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:16 }}>
+              ✅ Account verified! Now create your new password.
+            </div>
+            <form onSubmit={handleReset}>
+              <Input label="New Password" type="password" placeholder="Min. 6 characters" value={newPass} onChange={e => setNewPass(e.target.value)} />
+              <Input label="Confirm New Password" type="password" placeholder="Repeat new password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} />
+              {resetErr && <div style={{ background:C.redBg, color:"#b91c1c", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:14 }}>{resetErr}</div>}
+              <Btn style={{ width:"100%", padding:"13px", fontSize:15 }}>
+                Reset Password
+              </Btn>
+            </form>
+            <div style={{ textAlign:"center", marginTop:16 }}>
+              <button onClick={() => setScreen("login")} style={{
+                background:"none", border:"none", color:C.purple, fontSize:13,
+                fontWeight:600, cursor:"pointer",
+              }}>
+                ← Back to Login
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── SUCCESS SCREEN ── */}
+        {screen === "success" && (
+          <div style={{ textAlign:"center", padding:"20px 0" }}>
+            <div style={{ fontSize:60, marginBottom:16 }}>🎉</div>
+            <h2 style={{ margin:0, color:C.gray800, fontSize:22, fontWeight:800 }}>Password Reset!</h2>
+            <p style={{ margin:"12px 0 24px", color:C.gray600, fontSize:14, lineHeight:1.6 }}>
+              Your password has been successfully changed. You can now log in with your new password.
+            </p>
+            <Btn style={{ width:"100%", padding:"13px", fontSize:15 }} onClick={() => { setScreen("login"); setEmail(foundUser?.email||""); setPass(""); setErr(""); }}>
+              Go to Login →
+            </Btn>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ── Sidebar Nav ───────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  { id:"dashboard",   icon:"🏠", label:"Dashboard"  },
+  { id:"students",    icon:"👩‍🎓", label:"Students",  roles:["admin","teacher"] },
+  { id:"subjects",    icon:"📚", label:"Subjects"   },
+  { id:"timetable",   icon:"📅", label:"Timetable"  },
+  { id:"assignments", icon:"📝", label:"Assignments" },
+  { id:"results",     icon:"📊", label:"Results"    },
+  { id:"attendance",  icon:"✅", label:"Attendance"  },
+  { id:"notices",     icon:"📢", label:"Notices"    },
+  { id:"fees",        icon:"💰", label:"Fees"       },
+  { id:"messages",    icon:"💬", label:"Messages"   },
+  { id:"settings",    icon:"⚙️", label:"Settings"   },
+];
+
+function Sidebar({ page, onNav, user, mobileOpen, onClose }) {
+  const items = NAV_ITEMS.filter(n => !n.roles || n.roles.includes(user.role));
+  return (
+    <>
+      {mobileOpen && <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", zIndex:199 }} onClick={onClose} />}
+      <div style={{
+        width:220, minHeight:"100vh", background:`linear-gradient(180deg, ${C.purpleDark} 0%, ${C.purple} 100%)`,
+        display:"flex", flexDirection:"column", padding:"20px 0",
+        position:"fixed", left: mobileOpen ? 0 : -220, top:0, zIndex:200,
+        transition:"left 0.28s cubic-bezier(.4,0,.2,1)",
+        boxShadow: mobileOpen ? "4px 0 30px rgba(0,0,0,0.3)" : "none",
+      }}>
+        {/* Brand */}
+        <div style={{ padding:"0 20px 20px", borderBottom:`1px solid rgba(255,255,255,0.12)` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{
+              width:42, height:42, borderRadius:12, background:"rgba(255,255,255,0.15)",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, color:C.white, fontWeight:900,
+            }}>L</div>
+            <div>
+              <div style={{ color:C.white, fontWeight:800, fontSize:14, letterSpacing:"-0.3px" }}>Lukona</div>
+              <div style={{ color:"rgba(255,255,255,0.6)", fontSize:11 }}>Secondary School</div>
+            </div>
+          </div>
+        </div>
+        {/* Nav */}
+        <nav style={{ flex:1, padding:"12px 10px", overflowY:"auto" }}>
+          {items.map(n => {
+            const active = page === n.id;
+            return (
+              <button key={n.id} onClick={() => { onNav(n.id); onClose(); }} style={{
+                display:"flex", alignItems:"center", gap:12, width:"100%", padding:"11px 14px",
+                borderRadius:10, border:"none", cursor:"pointer", marginBottom:2,
+                background: active ? "rgba(255,255,255,0.18)" : "transparent",
+                color: active ? C.white : "rgba(255,255,255,0.65)",
+                fontSize:14, fontWeight: active ? 700 : 500, textAlign:"left",
+                transition:"all 0.15s",
+              }}
+              onMouseEnter={e => !active && (e.currentTarget.style.background="rgba(255,255,255,0.08)")}
+              onMouseLeave={e => !active && (e.currentTarget.style.background="transparent")}>
+                <span style={{ fontSize:16 }}>{n.icon}</span>
+                {n.label}
+                {active && <div style={{ marginLeft:"auto", width:4, height:18, borderRadius:2, background:C.white }} />}
+              </button>
+            );
+          })}
+        </nav>
+        {/* User */}
+        <div style={{ padding:"16px 14px", borderTop:`1px solid rgba(255,255,255,0.12)` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{
+              width:36, height:36, borderRadius:10, background:"rgba(255,255,255,0.2)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              color:C.white, fontWeight:700, fontSize:14,
+            }}>{user.name[0]}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ color:C.white, fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.name}</div>
+              <div style={{ color:"rgba(255,255,255,0.55)", fontSize:11, textTransform:"capitalize" }}>{user.role}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Top Navbar ────────────────────────────────────────────────────────────────
+function Topbar({ user, onLogout, onMenuToggle, unread, onNav }) {
+  return (
+    <div style={{
+      height:60, background:C.white, borderBottom:`1px solid ${C.gray100}`,
+      display:"flex", alignItems:"center", padding:"0 20px",
+      position:"sticky", top:0, zIndex:100,
+      boxShadow:"0 1px 8px rgba(60,52,137,0.06)",
+    }}>
+      <button onClick={onMenuToggle} style={{
+        background:"none", border:"none", cursor:"pointer", fontSize:22, color:C.gray600, marginRight:12, padding:4,
+        display:"flex", alignItems:"center",
+      }}>☰</button>
+      <span style={{ color:C.purple, fontWeight:800, fontSize:16, letterSpacing:"-0.3px", flex:1 }}>
+        Lukona Secondary School
+      </span>
+      <button onClick={() => onNav("notices")} style={{
+        position:"relative", background:"none", border:"none", cursor:"pointer", fontSize:20, marginRight:8, padding:6,
+      }}>
+        🔔
+        {unread > 0 && (
+          <span style={{
+            position:"absolute", top:2, right:2, background:C.red, color:C.white,
+            borderRadius:"50%", width:16, height:16, fontSize:10, fontWeight:700,
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}>{unread}</span>
+        )}
+      </button>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{
+          width:34, height:34, borderRadius:10, background:C.purpleFade,
+          color:C.purple, fontWeight:800, fontSize:14, display:"flex", alignItems:"center", justifyContent:"center",
+        }}>{user.name[0]}</div>
+        <div style={{ display:"flex", flexDirection:"column" }}>
+          <span style={{ fontSize:13, fontWeight:700, color:C.gray800 }}>{user.name}</span>
+          <span style={{ fontSize:11, color:C.gray400, textTransform:"capitalize" }}>{user.role}</span>
+        </div>
+        <Btn variant="ghost" size="sm" onClick={onLogout} style={{ marginLeft:8 }}>Logout</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Pages ─────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+
+// ── Dashboard ─────────────────────────────────────────────
+function DashboardPage({ user }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({});
+  useEffect(() => {
+    setTimeout(() => {
+      const db = getDB();
+      const student = db.students.find(s => s.user_id === user.id);
+      let avgMark = 0, attendancePct = 0, assignmentsDue = 0, unreadMsg = 0;
+      if (student) {
+        const myResults = db.results.filter(r => r.student_id === student.id);
+        avgMark = myResults.length ? Math.round(myResults.reduce((s,r)=>s+r.mark,0)/myResults.length) : 0;
+        const myAtt = db.attendance.filter(a => a.student_id === student.id);
+        attendancePct = myAtt.length ? Math.round(myAtt.filter(a=>a.status==="Present").length/myAtt.length*100) : 100;
+        assignmentsDue = db.assignments.filter(a => {
+          const st = a.statuses?.[student.id];
+          return st !== "Submitted";
+        }).length;
+      }
+      unreadMsg = db.messages.filter(m => m.receiver_id === user.id && !m.read).length;
+      const today = new Date().toLocaleDateString("en-US",{weekday:"long"});
+      const todayTT = db.timetable.filter(t => t.day === today).map(t => ({
+        ...t, subjectName: db.subjects.find(s=>s.id===t.subject_id)?.name || "Unknown"
+      }));
+      const recentNotices = db.notices.slice(0,3);
+      const myAssignments = db.assignments.slice(0,3).map(a => ({
+        ...a, subjectName: db.subjects.find(s=>s.id===a.subject_id)?.name,
+        myStatus: student ? (a.statuses?.[student.id] || "Not Started") : "N/A",
+      }));
+      setData({ avgMark, attendancePct, assignmentsDue, unreadMsg, todayTT, recentNotices, myAssignments });
+      setLoading(false);
+    }, 500);
+  }, [user]);
+
+  if (loading) return <Spinner />;
+  const role = user.role;
+
+  return (
+    <div>
+      <div style={{ marginBottom:24 }}>
+        <h2 style={{ margin:0, fontSize:24, fontWeight:800, color:C.gray800 }}>
+          Good {new Date().getHours()<12?"Morning":new Date().getHours()<18?"Afternoon":"Evening"}, {user.name.split(" ")[0]} 👋
+        </h2>
+        <p style={{ margin:"6px 0 0", color:C.gray600, fontSize:14 }}>
+          {new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
+        </p>
+      </div>
+
+      {role === "student" && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:16, marginBottom:24 }}>
+          <StatCard icon="📊" label="Average Mark" value={`${data.avgMark}%`} color={data.avgMark>=75?"green":data.avgMark>=50?"yellow":"red"} sub="Term 1 2026" />
+          <StatCard icon="✅" label="Attendance" value={`${data.attendancePct}%`} color={data.attendancePct>=85?"green":data.attendancePct>=70?"yellow":"red"} sub="This term" />
+          <StatCard icon="📝" label="Assignments Due" value={data.assignmentsDue} color={data.assignmentsDue===0?"green":data.assignmentsDue<=2?"yellow":"red"} sub="Pending" />
+          <StatCard icon="💬" label="Unread Messages" value={data.unreadMsg} color={data.unreadMsg===0?"green":"yellow"} sub="In your inbox" />
+        </div>
+      )}
+      {role === "teacher" && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:16, marginBottom:24 }}>
+          <StatCard icon="👩‍🎓" label="Total Students" value={getDB().students.length} color="purple" />
+          <StatCard icon="📚" label="Subjects" value={getDB().subjects.length} color="blue" />
+          <StatCard icon="📝" label="Assignments" value={getDB().assignments.length} color="yellow" />
+          <StatCard icon="💬" label="Unread Messages" value={data.unreadMsg} color={data.unreadMsg===0?"green":"yellow"} />
+        </div>
+      )}
+      {role === "admin" && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:16, marginBottom:24 }}>
+          <StatCard icon="👩‍🎓" label="Students" value={getDB().students.length} color="purple" />
+          <StatCard icon="👨‍🏫" label="Teachers" value={getDB().teachers.length} color="blue" />
+          <StatCard icon="📚" label="Subjects" value={getDB().subjects.length} color="green" />
+          <StatCard icon="📢" label="Notices" value={getDB().notices.length} color="yellow" />
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:16 }}>
+        {/* Today's Timetable */}
+        <Card>
+          <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:C.gray800 }}>📅 Today's Timetable</h3>
+          {data.todayTT?.length ? data.todayTT.map(t => (
+            <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:`1px solid ${C.gray100}` }}>
+              <div style={{ background:C.purpleFade, padding:"4px 10px", borderRadius:8, fontSize:12, fontWeight:700, color:C.purple, whiteSpace:"nowrap" }}>
+                {t.start_time}
+              </div>
+              <div>
+                <div style={{ fontWeight:600, fontSize:14, color:C.gray800 }}>{t.subjectName}</div>
+                <div style={{ fontSize:12, color:C.gray400 }}>Room {t.room} · Period {t.period}</div>
+              </div>
+            </div>
+          )) : <p style={{ color:C.gray400, fontSize:14 }}>No classes scheduled today.</p>}
+        </Card>
+
+        {/* Recent Notices */}
+        <Card>
+          <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:C.gray800 }}>📢 Recent Notices</h3>
+          {data.recentNotices?.map(n => (
+            <div key={n.id} style={{ padding:"10px 0", borderBottom:`1px solid ${C.gray100}` }}>
+              <div style={{ fontWeight:600, fontSize:14, color:C.gray800 }}>{n.title}</div>
+              <div style={{ fontSize:12, color:C.gray600, marginTop:3 }}>{n.body.substring(0,80)}…</div>
+              <div style={{ fontSize:11, color:C.gray400, marginTop:3 }}>{n.date_posted}</div>
+            </div>
+          ))}
+        </Card>
+
+        {/* Upcoming Assignments */}
+        {role === "student" && (
+          <Card>
+            <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:C.gray800 }}>📝 Upcoming Assignments</h3>
+            {data.myAssignments?.map(a => (
+              <div key={a.id} style={{ padding:"10px 0", borderBottom:`1px solid ${C.gray100}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={{ fontWeight:600, fontSize:14, color:C.gray800 }}>{a.title}</div>
+                  <Badge label={a.myStatus} color={a.myStatus==="Submitted"?"green":a.myStatus==="In Progress"?"yellow":"red"} />
+                </div>
+                <div style={{ fontSize:12, color:C.gray400, marginTop:3 }}>Due: {a.due_date} · {a.subjectName}</div>
+              </div>
+            ))}
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Students Page ──────────────────────────────────────────
+function StudentsPage({ user, toast }) {
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
+  const [search, setSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("All");
+  const [modal, setModal] = useState(null); // null | "add" | "edit"
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name:"",email:"",password:"student123",grade:"Grade 10",gender:"Female",dob:"",parent_name:"",parent_phone:"" });
+
+  function load() {
+    const db = getDB();
+    const list = db.students.map(s => {
+      const u = db.users.find(u => u.id === s.user_id);
+      return { ...s, userName: u?.name, userEmail: u?.email };
+    });
+    setStudents(list);
+    setLoading(false);
+  }
+  useEffect(() => { setTimeout(load, 400); }, []);
+
+  const grades = ["All", "Grade 8","Grade 9","Grade 10","Grade 11","Grade 12"];
+  const filtered = students.filter(s =>
+    (gradeFilter==="All" || s.grade===gradeFilter) &&
+    (!search || s.userName?.toLowerCase().includes(search.toLowerCase()) || s.userEmail?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  function openAdd() {
+    setForm({ name:"",email:"",password:"student123",grade:"Grade 10",gender:"Female",dob:"",parent_name:"",parent_phone:"" });
+    setEditing(null); setModal("add");
+  }
+  function openEdit(s) {
+    const db = getDB();
+    const u = db.users.find(u=>u.id===s.user_id);
+    setForm({ name:u.name, email:u.email, password:"", grade:s.grade, gender:s.gender, dob:s.dob, parent_name:s.parent_name, parent_phone:s.parent_phone });
+    setEditing(s); setModal("edit");
+  }
+  function save() {
+    if (!form.name||!form.email) { toast("Name and email are required.","error"); return; }
+    const db = getDB();
+    if (modal==="add") {
+      const uid = nextId(db.users);
+      db.users.push({ id:uid, name:form.name, email:form.email, password:form.password||"student123", role:"student" });
+      db.students.push({ id:nextId(db.students), user_id:uid, grade:form.grade, gender:form.gender, dob:form.dob, parent_name:form.parent_name, parent_phone:form.parent_phone });
+      toast("Student added successfully.");
+    } else {
+      const u = db.users.find(u=>u.id===editing.user_id);
+      if (u) { u.name=form.name; u.email=form.email; if(form.password) u.password=form.password; }
+      const s = db.students.find(s=>s.id===editing.id);
+      if (s) { s.grade=form.grade; s.gender=form.gender; s.dob=form.dob; s.parent_name=form.parent_name; s.parent_phone=form.parent_phone; }
+      toast("Student updated.");
+    }
+    saveDB(db); setModal(null); load();
+  }
+  function del(s) {
+    if (!confirm(`Delete student ${s.userName}? This cannot be undone.`)) return;
+    const db = getDB();
+    db.students = db.students.filter(x=>x.id!==s.id);
+    db.users = db.users.filter(x=>x.id!==s.user_id);
+    saveDB(db); toast("Student deleted.","warn"); load();
+  }
+
+  if (loading) return <Spinner />;
+  return (
+    <div>
+      <PageHeader title="Students" subtitle={`${students.length} enrolled students`}
+        action={user.role==="admin" && <Btn onClick={openAdd}>+ Add Student</Btn>} />
+      <Card style={{ marginBottom:16 }}>
+        <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+          <input placeholder="Search by name or email…" value={search} onChange={e=>setSearch(e.target.value)} style={{
+            flex:1, minWidth:200, padding:"9px 14px", border:`1.5px solid ${C.gray200}`, borderRadius:8, fontSize:14,
+          }} />
+          <select value={gradeFilter} onChange={e=>setGradeFilter(e.target.value)} style={{
+            padding:"9px 14px", border:`1.5px solid ${C.gray200}`, borderRadius:8, fontSize:14,
+          }}>
+            {grades.map(g=><option key={g}>{g}</option>)}
+          </select>
+        </div>
+      </Card>
+      <Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ borderBottom:`2px solid ${C.gray100}` }}>
+                {["Name","Email","Grade","Gender","Parent","Actions"].map(h=>(
+                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:12, fontWeight:700, color:C.gray600, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(s=>(
+                <tr key={s.id} style={{ borderBottom:`1px solid ${C.gray100}` }}
+                  onMouseEnter={e=>e.currentTarget.style.background=C.gray50}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <td style={{ padding:"12px 14px", fontWeight:600, color:C.gray800 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <div style={{ width:32,height:32,borderRadius:8,background:C.purpleFade,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.purple }}>{s.userName?.[0]}</div>
+                      {s.userName}
+                    </div>
+                  </td>
+                  <td style={{ padding:"12px 14px", fontSize:13, color:C.gray600 }}>{s.userEmail}</td>
+                  <td style={{ padding:"12px 14px" }}><Badge label={s.grade} color="purple" /></td>
+                  <td style={{ padding:"12px 14px", fontSize:13, color:C.gray600 }}>{s.gender}</td>
+                  <td style={{ padding:"12px 14px", fontSize:13, color:C.gray600 }}>{s.parent_name}</td>
+                  <td style={{ padding:"12px 14px" }}>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <Btn variant="ghost" size="sm" onClick={()=>openEdit(s)}>Edit</Btn>
+                      {user.role==="admin" && <Btn variant="danger" size="sm" onClick={()=>del(s)}>Delete</Btn>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!filtered.length && <tr><td colSpan={6} style={{ padding:24, textAlign:"center", color:C.gray400 }}>No students found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {modal && (
+        <Modal title={modal==="add"?"Add New Student":"Edit Student"} onClose={()=>setModal(null)}>
+          <Input label="Full Name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} />
+          <Input label="Email" type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} />
+          <Input label={modal==="add"?"Password":"New Password (leave blank to keep)"} type="password" value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} />
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Select label="Grade" value={form.grade} onChange={e=>setForm(p=>({...p,grade:e.target.value}))}>
+              {["Grade 8","Grade 9","Grade 10","Grade 11","Grade 12"].map(g=><option key={g}>{g}</option>)}
+            </Select>
+            <Select label="Gender" value={form.gender} onChange={e=>setForm(p=>({...p,gender:e.target.value}))}>
+              <option>Female</option><option>Male</option><option>Other</option>
+            </Select>
+          </div>
+          <Input label="Date of Birth" type="date" value={form.dob} onChange={e=>setForm(p=>({...p,dob:e.target.value}))} />
+          <Input label="Parent/Guardian Name" value={form.parent_name} onChange={e=>setForm(p=>({...p,parent_name:e.target.value}))} />
+          <Input label="Parent Phone" value={form.parent_phone} onChange={e=>setForm(p=>({...p,parent_phone:e.target.value}))} />
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="outline" onClick={()=>setModal(null)}>Cancel</Btn>
+            <Btn onClick={save}>{modal==="add"?"Add Student":"Save Changes"}</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Subjects Page ──────────────────────────────────────────
+function SubjectsPage({ user, toast }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name:"", grade:"Grade 10", teacher_id:"" });
+
+  function load() {
+    const db = getDB();
+    setItems(db.subjects.map(s => ({
+      ...s,
+      teacherName: db.teachers.find(t=>t.id===s.teacher_id) ? db.users.find(u=>u.id===db.teachers.find(t=>t.id===s.teacher_id)?.user_id)?.name : "Unassigned"
+    })));
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,300); },[]);
+
+  function openAdd() { setForm({ name:"", grade:"Grade 10", teacher_id:"" }); setEditing(null); setModal(true); }
+  function openEdit(s) { setForm({ name:s.name, grade:s.grade, teacher_id:String(s.teacher_id) }); setEditing(s); setModal(true); }
+  function save() {
+    if (!form.name) { toast("Subject name required.","error"); return; }
+    const db = getDB();
+    if (!editing) {
+      db.subjects.push({ id:nextId(db.subjects), name:form.name, grade:form.grade, teacher_id:Number(form.teacher_id)||null });
+      toast("Subject added.");
+    } else {
+      const s = db.subjects.find(x=>x.id===editing.id);
+      if(s){ s.name=form.name; s.grade=form.grade; s.teacher_id=Number(form.teacher_id)||null; }
+      toast("Subject updated.");
+    }
+    saveDB(db); setModal(false); load();
+  }
+  function del(id) {
+    if (!confirm("Delete this subject?")) return;
+    const db = getDB(); db.subjects = db.subjects.filter(s=>s.id!==id); saveDB(db); toast("Deleted.","warn"); load();
+  }
+
+  const db = getDB();
+  const teachers = db.teachers.map(t=>({ ...t, name: db.users.find(u=>u.id===t.user_id)?.name }));
+
+  if (loading) return <Spinner />;
+  return (
+    <div>
+      <PageHeader title="Subjects" subtitle="Manage school subjects and teacher assignments"
+        action={user.role==="admin" && <Btn onClick={openAdd}>+ Add Subject</Btn>} />
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16 }}>
+        {items.map(s=>(
+          <Card key={s.id}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div>
+                <div style={{ fontSize:16, fontWeight:700, color:C.gray800, marginBottom:6 }}>{s.name}</div>
+                <Badge label={s.grade} color="purple" />
+                <div style={{ fontSize:13, color:C.gray600, marginTop:8 }}>👨‍🏫 {s.teacherName}</div>
+              </div>
+              {user.role==="admin" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <Btn variant="ghost" size="sm" onClick={()=>openEdit(s)}>Edit</Btn>
+                  <Btn variant="danger" size="sm" onClick={()=>del(s.id)}>Del</Btn>
+                </div>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+      {modal && (
+        <Modal title={editing?"Edit Subject":"Add Subject"} onClose={()=>setModal(false)}>
+          <Input label="Subject Name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} />
+          <Select label="Grade" value={form.grade} onChange={e=>setForm(p=>({...p,grade:e.target.value}))}>
+            {["Grade 8","Grade 9","Grade 10","Grade 11","Grade 12"].map(g=><option key={g}>{g}</option>)}
+          </Select>
+          <Select label="Teacher" value={form.teacher_id} onChange={e=>setForm(p=>({...p,teacher_id:e.target.value}))}>
+            <option value="">-- Select Teacher --</option>
+            {teachers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+          </Select>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn onClick={save}>{editing?"Save":"Add"}</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Timetable Page ────────────────────────────────────────
+function TimetablePage() {
+  const [grade, setGrade] = useState("Grade 10");
+  const [loading, setLoading] = useState(true);
+  const [tt, setTt] = useState([]);
+  const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+  const PERIODS = [1,2,3,4,5];
+
+  useEffect(()=>{
+    setTimeout(()=>{
+      const db = getDB();
+      setTt(db.timetable.map(t=>({
+        ...t, subjectName: db.subjects.find(s=>s.id===t.subject_id)?.name||"?"
+      })));
+      setLoading(false);
+    },300);
+  },[]);
+
+  const grades = ["Grade 8","Grade 9","Grade 10","Grade 11","Grade 12"];
+  const filtered = tt.filter(t=>t.grade===grade);
+  function getCell(day,period) {
+    return filtered.find(t=>t.day===day && t.period===period);
+  }
+
+  if (loading) return <Spinner />;
+  return (
+    <div>
+      <PageHeader title="Timetable" subtitle="Weekly class schedule" />
+      <Card style={{ marginBottom:16 }}>
+        <Select value={grade} onChange={e=>setGrade(e.target.value)} style={{ marginBottom:0 }}>
+          {grades.map(g=><option key={g}>{g}</option>)}
+        </Select>
+      </Card>
+      <Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:600 }}>
+            <thead>
+              <tr>
+                <th style={{ padding:"10px 14px", fontSize:12, fontWeight:700, color:C.gray600, textAlign:"left", background:C.gray50 }}>Period</th>
+                {DAYS.map(d=>(
+                  <th key={d} style={{ padding:"10px 14px", fontSize:12, fontWeight:700, color:C.purple, textAlign:"center", background:C.purpleFade }}>{d}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PERIODS.map(p=>(
+                <tr key={p} style={{ borderBottom:`1px solid ${C.gray100}` }}>
+                  <td style={{ padding:"12px 14px", fontWeight:700, color:C.gray600, fontSize:13, whiteSpace:"nowrap" }}>Period {p}</td>
+                  {DAYS.map(d=>{
+                    const cell = getCell(d,p);
+                    return (
+                      <td key={d} style={{ padding:"10px 14px", textAlign:"center" }}>
+                        {cell ? (
+                          <div style={{ background:C.purpleFade, borderRadius:8, padding:"8px 10px" }}>
+                            <div style={{ fontWeight:700, fontSize:13, color:C.purple }}>{cell.subjectName}</div>
+                            <div style={{ fontSize:11, color:C.gray600, marginTop:2 }}>{cell.start_time}–{cell.end_time}</div>
+                            <div style={{ fontSize:11, color:C.gray400 }}>Room {cell.room}</div>
+                          </div>
+                        ) : (
+                          <span style={{ color:C.gray200, fontSize:12 }}>—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── Assignments Page ───────────────────────────────────────
+function AssignmentsPage({ user, toast }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ title:"", subject_id:"", description:"", due_date:"", assigned_date: new Date().toISOString().slice(0,10) });
+
+  const db = getDB();
+  const student = db.students.find(s=>s.user_id===user.id);
+
+  function load() {
+    const db2 = getDB();
+    const st = db2.students.find(s=>s.user_id===user.id);
+    setItems(db2.assignments.map(a=>({
+      ...a, subjectName: db2.subjects.find(s=>s.id===a.subject_id)?.name,
+      myStatus: st ? (a.statuses?.[st.id]||"Not Started") : null,
+    })));
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,400); },[]);
+
+  function updateStatus(aId, status) {
+    if (!student) return;
+    const db2 = getDB();
+    const a = db2.assignments.find(x=>x.id===aId);
+    if (a) { a.statuses = a.statuses||{}; a.statuses[student.id]=status; }
+    saveDB(db2); toast(`Status updated to "${status}".`); load();
+  }
+
+  function addAssignment() {
+    if (!form.title||!form.subject_id||!form.due_date) { toast("Fill all required fields.","error"); return; }
+    const db2 = getDB();
+    db2.assignments.push({ id:nextId(db2.assignments), ...form, subject_id:Number(form.subject_id), statuses:{} });
+    saveDB(db2); toast("Assignment posted."); setModal(false); load();
+  }
+
+  const subjects = db.subjects;
+  if (loading) return <Spinner />;
+  return (
+    <div>
+      <PageHeader title="Assignments" subtitle="Track all assignments and submission status"
+        action={user.role!=="student" && <Btn onClick={()=>setModal(true)}>+ New Assignment</Btn>} />
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {items.map(a=>{
+          const statusColor = a.myStatus==="Submitted"?"green":a.myStatus==="In Progress"?"yellow":"red";
+          return (
+            <Card key={a.id}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:C.gray800, marginBottom:4 }}>{a.title}</div>
+                  <div style={{ fontSize:13, color:C.gray600, marginBottom:6 }}>{a.description}</div>
+                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                    <span style={{ fontSize:12, color:C.gray400 }}>📚 {a.subjectName}</span>
+                    <span style={{ fontSize:12, color:C.gray400 }}>📅 Due: {a.due_date}</span>
+                    <span style={{ fontSize:12, color:C.gray400 }}>Assigned: {a.assigned_date}</span>
+                  </div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  {a.myStatus && <Badge label={a.myStatus} color={statusColor} />}
+                  {user.role==="student" && (
+                    <select value={a.myStatus||"Not Started"} onChange={e=>updateStatus(a.id,e.target.value)} style={{
+                      padding:"6px 10px", border:`1.5px solid ${C.gray200}`, borderRadius:8, fontSize:12, cursor:"pointer",
+                    }}>
+                      <option>Not Started</option>
+                      <option>In Progress</option>
+                      <option>Submitted</option>
+                    </select>
+                  )}
+                  {user.role!=="student" && (
+                    <div style={{ fontSize:13, color:C.gray600 }}>
+                      {Object.values(a.statuses||{}).filter(v=>v==="Submitted").length} submitted
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+        {!items.length && <Card><p style={{ textAlign:"center", color:C.gray400 }}>No assignments yet.</p></Card>}
+      </div>
+
+      {modal && (
+        <Modal title="Post New Assignment" onClose={()=>setModal(false)}>
+          <Input label="Title *" value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} />
+          <Select label="Subject *" value={form.subject_id} onChange={e=>setForm(p=>({...p,subject_id:e.target.value}))}>
+            <option value="">-- Select Subject --</option>
+            {subjects.map(s=><option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
+          </Select>
+          <Textarea label="Description" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} />
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Assigned Date" type="date" value={form.assigned_date} onChange={e=>setForm(p=>({...p,assigned_date:e.target.value}))} />
+            <Input label="Due Date *" type="date" value={form.due_date} onChange={e=>setForm(p=>({...p,due_date:e.target.value}))} />
+          </div>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn onClick={addAssignment}>Post Assignment</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Results Page ───────────────────────────────────────────
+function ResultsPage({ user, toast }) {
+  const [results, setResults] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ student_id:"", subject_id:"", term:"Term 1", year:2026, mark:"" });
+
+  function load() {
+    const db = getDB();
+    const myStudent = db.students.find(s=>s.user_id===user.id);
+    let res = user.role==="student"
+      ? db.results.filter(r=>r.student_id===myStudent?.id)
+      : db.results;
+    const enriched = res.map(r=>({
+      ...r,
+      studentName: db.users.find(u=>u.id===db.students.find(s=>s.id===r.student_id)?.user_id)?.name,
+      subjectName: db.subjects.find(s=>s.id===r.subject_id)?.name,
+    }));
+    setResults(enriched);
+    setStudents(db.students.map(s=>({ ...s, name: db.users.find(u=>u.id===s.user_id)?.name })));
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,400); },[]);
+
+  function addResult() {
+    if (!form.student_id||!form.subject_id||form.mark==="") { toast("All fields required.","error"); return; }
+    const mark = Number(form.mark);
+    if (mark<0||mark>100) { toast("Mark must be 0-100.","error"); return; }
+    const db = getDB();
+    const existing = db.results.find(r=>r.student_id===Number(form.student_id)&&r.subject_id===Number(form.subject_id)&&r.term===form.term&&r.year===Number(form.year));
+    if (existing) { existing.mark=mark; toast("Mark updated."); }
+    else { db.results.push({ id:nextId(db.results), student_id:Number(form.student_id), subject_id:Number(form.subject_id), term:form.term, year:Number(form.year), mark }); toast("Mark entered."); }
+    saveDB(db); setModal(false); load();
+  }
+
+  const db2 = getDB();
+  const gradeColor = m => m>=75?"green":m>=50?"yellow":"red";
+  if (loading) return <Spinner />;
+
+  return (
+    <div>
+      <PageHeader title="Results" subtitle="Academic performance records"
+        action={user.role!=="student" && <Btn onClick={()=>setModal(true)}>+ Enter Mark</Btn>} />
+      <Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ borderBottom:`2px solid ${C.gray100}` }}>
+                {(user.role!=="student"?["Student","Subject","Term","Year","Mark","Grade"]:["Subject","Term","Year","Mark","Grade"]).map(h=>(
+                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:12, fontWeight:700, color:C.gray600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {results.map(r=>(
+                <tr key={r.id} style={{ borderBottom:`1px solid ${C.gray100}` }}
+                  onMouseEnter={e=>e.currentTarget.style.background=C.gray50}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  {user.role!=="student" && <td style={{ padding:"12px 14px", fontWeight:600, color:C.gray800 }}>{r.studentName}</td>}
+                  <td style={{ padding:"12px 14px", color:C.gray800 }}>{r.subjectName}</td>
+                  <td style={{ padding:"12px 14px", color:C.gray600 }}>{r.term}</td>
+                  <td style={{ padding:"12px 14px", color:C.gray600 }}>{r.year}</td>
+                  <td style={{ padding:"12px 14px", fontWeight:700, color:C.gray800 }}>{r.mark}%</td>
+                  <td style={{ padding:"12px 14px" }}>
+                    <Badge label={r.mark>=75?"Distinction":r.mark>=50?"Pass":"Fail"} color={gradeColor(r.mark)} />
+                  </td>
+                </tr>
+              ))}
+              {!results.length && <tr><td colSpan={6} style={{ padding:24, textAlign:"center", color:C.gray400 }}>No results recorded yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {modal && (
+        <Modal title="Enter Mark" onClose={()=>setModal(false)}>
+          <Select label="Student" value={form.student_id} onChange={e=>setForm(p=>({...p,student_id:e.target.value}))}>
+            <option value="">-- Select Student --</option>
+            {students.map(s=><option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
+          </Select>
+          <Select label="Subject" value={form.subject_id} onChange={e=>setForm(p=>({...p,subject_id:e.target.value}))}>
+            <option value="">-- Select Subject --</option>
+            {db2.subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            <Select label="Term" value={form.term} onChange={e=>setForm(p=>({...p,term:e.target.value}))}>
+              <option>Term 1</option><option>Term 2</option><option>Term 3</option>
+            </Select>
+            <Input label="Year" type="number" value={form.year} onChange={e=>setForm(p=>({...p,year:e.target.value}))} />
+            <Input label="Mark (0–100)" type="number" min={0} max={100} value={form.mark} onChange={e=>setForm(p=>({...p,mark:e.target.value}))} />
+          </div>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn onClick={addResult}>Save Mark</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Attendance Page ────────────────────────────────────────
+function AttendancePage({ user, toast }) {
+  const [records, setRecords] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(new Date().toISOString().slice(0,10));
+  const [marking, setMarking] = useState(false);
+  const [marks, setMarks] = useState({});
+
+  function load() {
+    const db = getDB();
+    const myStudent = db.students.find(s=>s.user_id===user.id);
+    let atts = user.role==="student"
+      ? db.attendance.filter(a=>a.student_id===myStudent?.id)
+      : db.attendance;
+    const enriched = atts.map(a=>({
+      ...a,
+      studentName: db.users.find(u=>u.id===db.students.find(s=>s.id===a.student_id)?.user_id)?.name,
+    }));
+    setRecords(enriched);
+    const sts = db.students.map(s=>({ ...s, name: db.users.find(u=>u.id===s.user_id)?.name }));
+    setStudents(sts);
+    // init marks
+    const m = {};
+    sts.forEach(s => {
+      const existing = db.attendance.find(a=>a.student_id===s.id&&a.date===date);
+      m[s.id] = existing?.status || "Present";
+    });
+    setMarks(m);
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,400); },[date]);
+
+  function saveAttendance() {
+    const db = getDB();
+    students.forEach(s=>{
+      const existing = db.attendance.find(a=>a.student_id===s.id&&a.date===date);
+      if (existing) existing.status = marks[s.id]||"Present";
+      else db.attendance.push({ id:nextId(db.attendance), student_id:s.id, date, status:marks[s.id]||"Present", reason:"" });
+    });
+    saveDB(db); toast("Attendance saved."); setMarking(false); load();
+  }
+
+  const statusColor = s => s==="Present"?"green":s==="Late"?"yellow":"red";
+  if (loading) return <Spinner />;
+
+  const myStudent = getDB().students.find(s=>s.user_id===user.id);
+  const myRecords = user.role==="student" ? records : records.filter(r=>r.date===date);
+  const summary = user.role==="student" ? {
+    total: records.length,
+    present: records.filter(r=>r.status==="Present").length,
+    late: records.filter(r=>r.status==="Late").length,
+    absent: records.filter(r=>r.status==="Absent").length,
+  } : null;
+
+  return (
+    <div>
+      <PageHeader title="Attendance" subtitle="Daily attendance records"
+        action={user.role!=="student" && (
+          <div style={{ display:"flex", gap:8 }}>
+            <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{
+              padding:"9px 14px", border:`1.5px solid ${C.gray200}`, borderRadius:8, fontSize:14,
+            }} />
+            <Btn onClick={()=>setMarking(!marking)}>{marking?"Cancel":"Mark Attendance"}</Btn>
+          </div>
+        )} />
+
+      {summary && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
+          <StatCard icon="📅" label="Total Days" value={summary.total} color="purple" />
+          <StatCard icon="✅" label="Present" value={summary.present} color="green" />
+          <StatCard icon="⏰" label="Late" value={summary.late} color="yellow" />
+          <StatCard icon="❌" label="Absent" value={summary.absent} color="red" />
+        </div>
+      )}
+
+      {user.role!=="student" && marking && (
+        <Card style={{ marginBottom:16 }}>
+          <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:700 }}>Mark Attendance for {date}</h3>
+          {students.map(s=>(
+            <div key={s.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${C.gray100}` }}>
+              <span style={{ fontWeight:500, color:C.gray800 }}>{s.name} · {s.grade}</span>
+              <select value={marks[s.id]||"Present"} onChange={e=>setMarks(p=>({...p,[s.id]:e.target.value}))} style={{
+                padding:"6px 12px", border:`1.5px solid ${C.gray200}`, borderRadius:8, fontSize:13,
+              }}>
+                <option>Present</option><option>Late</option><option>Absent</option>
+              </select>
+            </div>
+          ))}
+          <div style={{ marginTop:16 }}>
+            <Btn onClick={saveAttendance}>Save Attendance</Btn>
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ borderBottom:`2px solid ${C.gray100}` }}>
+                {(user.role!=="student"?["Student","Date","Status"]:["Date","Status"]).map(h=>(
+                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:12, fontWeight:700, color:C.gray600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(user.role==="student"?records:myRecords).sort((a,b)=>b.date.localeCompare(a.date)).map(r=>(
+                <tr key={r.id} style={{ borderBottom:`1px solid ${C.gray100}` }}>
+                  {user.role!=="student" && <td style={{ padding:"12px 14px", fontWeight:600, color:C.gray800 }}>{r.studentName}</td>}
+                  <td style={{ padding:"12px 14px", color:C.gray600 }}>{r.date}</td>
+                  <td style={{ padding:"12px 14px" }}><Badge label={r.status} color={statusColor(r.status)} /></td>
+                </tr>
+              ))}
+              {!records.length && <tr><td colSpan={3} style={{ padding:24, textAlign:"center", color:C.gray400 }}>No attendance records found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── Notices Page ───────────────────────────────────────────
+function NoticesPage({ user, toast }) {
+  const [notices, setNotices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ title:"", body:"", audience:"all" });
+
+  function load() {
+    const db = getDB();
+    setNotices([...db.notices].sort((a,b)=>b.date_posted.localeCompare(a.date_posted)));
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,300); },[]);
+
+  function post() {
+    if (!form.title||!form.body) { toast("Title and message required.","error"); return; }
+    const db = getDB();
+    db.notices.push({ id:nextId(db.notices), ...form, posted_by:user.id, date_posted:new Date().toISOString().slice(0,10) });
+    saveDB(db); toast("Notice posted."); setModal(false); setForm({ title:"", body:"", audience:"all" }); load();
+  }
+  function del(id) {
+    if (!confirm("Delete this notice?")) return;
+    const db = getDB(); db.notices=db.notices.filter(n=>n.id!==id); saveDB(db); toast("Deleted.","warn"); load();
+  }
+
+  if (loading) return <Spinner />;
+  return (
+    <div>
+      <PageHeader title="Notices" subtitle="School announcements"
+        action={user.role==="admin" && <Btn onClick={()=>setModal(true)}>+ Post Notice</Btn>} />
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {notices.map(n=>(
+          <Card key={n.id}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:C.gray800 }}>{n.title}</div>
+                  <Badge label={n.audience==="all"?"Everyone":"Students"} color={n.audience==="all"?"blue":"purple"} />
+                </div>
+                <div style={{ fontSize:14, color:C.gray600, lineHeight:1.6, marginBottom:8 }}>{n.body}</div>
+                <div style={{ fontSize:12, color:C.gray400 }}>Posted: {n.date_posted}</div>
+              </div>
+              {user.role==="admin" && (
+                <Btn variant="danger" size="sm" onClick={()=>del(n.id)}>Delete</Btn>
+              )}
+            </div>
+          </Card>
+        ))}
+        {!notices.length && <Card><p style={{ textAlign:"center", color:C.gray400 }}>No notices yet.</p></Card>}
+      </div>
+
+      {modal && (
+        <Modal title="Post New Notice" onClose={()=>setModal(false)}>
+          <Input label="Title *" value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} />
+          <Textarea label="Message *" value={form.body} onChange={e=>setForm(p=>({...p,body:e.target.value}))} />
+          <Select label="Audience" value={form.audience} onChange={e=>setForm(p=>({...p,audience:e.target.value}))}>
+            <option value="all">Everyone</option>
+            <option value="students">Students Only</option>
+            <option value="teachers">Teachers Only</option>
+          </Select>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn onClick={post}>Post Notice</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Fees Page ──────────────────────────────────────────────
+function FeesPage({ user, toast }) {
+  const [fees, setFees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ student_id:"", term:"Term 1", amount_due:2500, amount_paid:0, due_date:"" });
+
+  function load() {
+    const db = getDB();
+    const myStudent = db.students.find(s=>s.user_id===user.id);
+    let f = user.role==="student"
+      ? db.fees.filter(x=>x.student_id===myStudent?.id)
+      : db.fees;
+    setFees(f.map(x=>({
+      ...x,
+      studentName: db.users.find(u=>u.id===db.students.find(s=>s.id===x.student_id)?.user_id)?.name,
+    })));
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,400); },[]);
+
+  function save() {
+    if (!form.student_id||!form.due_date) { toast("Fill all required fields.","error"); return; }
+    const db = getDB();
+    db.fees.push({ id:nextId(db.fees), student_id:Number(form.student_id), term:form.term, amount_due:Number(form.amount_due), amount_paid:Number(form.amount_paid), due_date:form.due_date });
+    saveDB(db); toast("Fee record added."); setModal(false); load();
+  }
+
+  const db2 = getDB();
+  const students = db2.students.map(s=>({ ...s, name: db2.users.find(u=>u.id===s.user_id)?.name }));
+  const feeStatus = f => {
+    if (f.amount_paid>=f.amount_due) return { label:"Paid", color:"green" };
+    if (f.amount_paid>0) return { label:"Partial", color:"yellow" };
+    return { label:"Unpaid", color:"red" };
+  };
+
+  if (loading) return <Spinner />;
+  return (
+    <div>
+      <PageHeader title="Fees" subtitle="School fee records and payment status"
+        action={user.role==="admin" && <Btn onClick={()=>setModal(true)}>+ Add Record</Btn>} />
+      <Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ borderBottom:`2px solid ${C.gray100}` }}>
+                {(user.role!=="student"?["Student","Term","Amount Due","Amount Paid","Balance","Due Date","Status"]:
+                  ["Term","Amount Due","Amount Paid","Balance","Due Date","Status"]).map(h=>(
+                  <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:12, fontWeight:700, color:C.gray600, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {fees.map(f=>{
+                const st = feeStatus(f);
+                const bal = f.amount_due - f.amount_paid;
+                return (
+                  <tr key={f.id} style={{ borderBottom:`1px solid ${C.gray100}` }}
+                    onMouseEnter={e=>e.currentTarget.style.background=C.gray50}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    {user.role!=="student" && <td style={{ padding:"12px 14px", fontWeight:600, color:C.gray800 }}>{f.studentName}</td>}
+                    <td style={{ padding:"12px 14px", color:C.gray600 }}>{f.term}</td>
+                    <td style={{ padding:"12px 14px", color:C.gray800 }}>K {f.amount_due.toLocaleString()}</td>
+                    <td style={{ padding:"12px 14px", color:C.green, fontWeight:600 }}>K {f.amount_paid.toLocaleString()}</td>
+                    <td style={{ padding:"12px 14px", color:bal>0?C.red:C.green, fontWeight:600 }}>K {bal.toLocaleString()}</td>
+                    <td style={{ padding:"12px 14px", color:C.gray600 }}>{f.due_date}</td>
+                    <td style={{ padding:"12px 14px" }}><Badge label={st.label} color={st.color} /></td>
+                  </tr>
+                );
+              })}
+              {!fees.length && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", color:C.gray400 }}>No fee records found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {modal && (
+        <Modal title="Add Fee Record" onClose={()=>setModal(false)}>
+          <Select label="Student" value={form.student_id} onChange={e=>setForm(p=>({...p,student_id:e.target.value}))}>
+            <option value="">-- Select Student --</option>
+            {students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
+          <Select label="Term" value={form.term} onChange={e=>setForm(p=>({...p,term:e.target.value}))}>
+            <option>Term 1</option><option>Term 2</option><option>Term 3</option>
+          </Select>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Amount Due (K)" type="number" value={form.amount_due} onChange={e=>setForm(p=>({...p,amount_due:e.target.value}))} />
+            <Input label="Amount Paid (K)" type="number" value={form.amount_paid} onChange={e=>setForm(p=>({...p,amount_paid:e.target.value}))} />
+          </div>
+          <Input label="Due Date" type="date" value={form.due_date} onChange={e=>setForm(p=>({...p,due_date:e.target.value}))} />
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn onClick={save}>Add Record</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Messages Page ──────────────────────────────────────────
+function MessagesPage({ user, toast }) {
+  const [msgs, setMsgs] = useState([]);
+  const [view, setView] = useState("inbox"); // inbox | compose | thread
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ receiver_id:"", subject:"", body:"" });
+  const [reply, setReply] = useState("");
+
+  function load() {
+    const db = getDB();
+    const all = db.messages.map(m=>({
+      ...m,
+      senderName: db.users.find(u=>u.id===m.sender_id)?.name,
+      receiverName: db.users.find(u=>u.id===m.receiver_id)?.name,
+    }));
+    setMsgs(all);
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,400); },[]);
+
+  const inbox = msgs.filter(m=>m.receiver_id===user.id);
+  const sent = msgs.filter(m=>m.sender_id===user.id);
+  const unread = inbox.filter(m=>!m.read).length;
+
+  function openMsg(m) {
+    const db = getDB();
+    const msg = db.messages.find(x=>x.id===m.id);
+    if (msg) { msg.read=true; saveDB(db); }
+    setSelected(m); setView("thread"); load();
+  }
+
+  function send() {
+    if (!form.receiver_id||!form.subject||!form.body) { toast("All fields required.","error"); return; }
+    const db = getDB();
+    db.messages.push({ id:nextId(db.messages), sender_id:user.id, receiver_id:Number(form.receiver_id), subject:form.subject, body:form.body, date_sent:new Date().toISOString(), read:false });
+    saveDB(db); toast("Message sent."); setForm({ receiver_id:"", subject:"", body:"" }); setView("inbox"); load();
+  }
+
+  function sendReply() {
+    if (!reply.trim()) { toast("Write a reply first.","error"); return; }
+    const db = getDB();
+    const other = selected.sender_id===user.id ? selected.receiver_id : selected.sender_id;
+    db.messages.push({ id:nextId(db.messages), sender_id:user.id, receiver_id:other, subject:`Re: ${selected.subject}`, body:reply, date_sent:new Date().toISOString(), read:false });
+    saveDB(db); toast("Reply sent."); setReply(""); load();
+  }
+
+  const db2 = getDB();
+  const contacts = db2.users.filter(u=>u.id!==user.id);
+  if (loading) return <Spinner />;
+
+  return (
+    <div>
+      <PageHeader title="Messages" subtitle={`${unread} unread message${unread!==1?"s":""}`}
+        action={
+          <div style={{ display:"flex", gap:8 }}>
+            {view!=="inbox" && <Btn variant="outline" onClick={()=>setView("inbox")}>← Back</Btn>}
+            <Btn onClick={()=>setView("compose")}>✉️ Compose</Btn>
+          </div>
+        } />
+
+      {view==="compose" && (
+        <Card>
+          <h3 style={{ margin:"0 0 16px", fontSize:15, fontWeight:700, color:C.gray800 }}>New Message</h3>
+          <Select label="To" value={form.receiver_id} onChange={e=>setForm(p=>({...p,receiver_id:e.target.value}))}>
+            <option value="">-- Select recipient --</option>
+            {contacts.map(c=><option key={c.id} value={c.id}>{c.name} ({c.role})</option>)}
+          </Select>
+          <Input label="Subject" value={form.subject} onChange={e=>setForm(p=>({...p,subject:e.target.value}))} />
+          <Textarea label="Message" value={form.body} onChange={e=>setForm(p=>({...p,body:e.target.value}))} />
+          <div style={{ display:"flex", gap:10 }}>
+            <Btn onClick={send}>Send Message</Btn>
+            <Btn variant="outline" onClick={()=>setView("inbox")}>Cancel</Btn>
+          </div>
+        </Card>
+      )}
+
+      {view==="thread" && selected && (
+        <Card>
+          <h3 style={{ margin:"0 0 4px", fontSize:17, fontWeight:700, color:C.gray800 }}>{selected.subject}</h3>
+          <div style={{ fontSize:13, color:C.gray400, marginBottom:20 }}>
+            From: {selected.senderName} → To: {selected.receiverName} · {new Date(selected.date_sent).toLocaleString()}
+          </div>
+          <div style={{ background:C.gray50, borderRadius:10, padding:16, marginBottom:16, fontSize:14, color:C.gray700, lineHeight:1.7 }}>
+            {selected.body}
+          </div>
+          <h4 style={{ margin:"0 0 10px", fontSize:14, color:C.gray600 }}>Reply</h4>
+          <Textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Write your reply…" />
+          <Btn onClick={sendReply}>Send Reply</Btn>
+        </Card>
+      )}
+
+      {view==="inbox" && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          <Card>
+            <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:C.gray800 }}>📥 Inbox ({unread} unread)</h3>
+            {inbox.length===0 && <p style={{ color:C.gray400, fontSize:14 }}>No messages.</p>}
+            {inbox.sort((a,b)=>b.date_sent.localeCompare(a.date_sent)).map(m=>(
+              <div key={m.id} onClick={()=>openMsg(m)} style={{
+                padding:"12px 0", borderBottom:`1px solid ${C.gray100}`, cursor:"pointer",
+                opacity: m.read?0.65:1,
+              }}
+              onMouseEnter={e=>e.currentTarget.style.paddingLeft="8px"}
+              onMouseLeave={e=>e.currentTarget.style.paddingLeft="0"}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <div style={{ fontWeight: m.read?500:700, fontSize:14, color:C.gray800 }}>{m.subject}</div>
+                  {!m.read && <span style={{ width:8, height:8, borderRadius:"50%", background:C.purple, flexShrink:0, marginTop:4 }} />}
+                </div>
+                <div style={{ fontSize:12, color:C.gray400, marginTop:2 }}>From: {m.senderName} · {new Date(m.date_sent).toLocaleDateString()}</div>
+              </div>
+            ))}
+          </Card>
+          <Card>
+            <h3 style={{ margin:"0 0 14px", fontSize:15, fontWeight:700, color:C.gray800 }}>📤 Sent</h3>
+            {sent.length===0 && <p style={{ color:C.gray400, fontSize:14 }}>No sent messages.</p>}
+            {sent.sort((a,b)=>b.date_sent.localeCompare(a.date_sent)).map(m=>(
+              <div key={m.id} onClick={()=>openMsg(m)} style={{
+                padding:"12px 0", borderBottom:`1px solid ${C.gray100}`, cursor:"pointer",
+              }}>
+                <div style={{ fontWeight:600, fontSize:14, color:C.gray800 }}>{m.subject}</div>
+                <div style={{ fontSize:12, color:C.gray400, marginTop:2 }}>To: {m.receiverName} · {new Date(m.date_sent).toLocaleDateString()}</div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Settings Page ──────────────────────────────────────────
+function SettingsPage({ user, onUserUpdate, toast }) {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [oldPass, setOldPass] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+
+  function saveProfile() {
+    if (!name||!email) { toast("Name and email required.","error"); return; }
+    const db = getDB();
+    const u = db.users.find(x=>x.id===user.id);
+    if (u) { u.name=name; u.email=email; }
+    saveDB(db); toast("Profile updated."); onUserUpdate({ ...user, name, email });
+  }
+
+  function changePassword() {
+    if (!oldPass||!newPass||!confirmPass) { toast("Fill all password fields.","error"); return; }
+    const db = getDB();
+    const u = db.users.find(x=>x.id===user.id);
+    if (!u||u.password!==oldPass) { toast("Current password is incorrect.","error"); return; }
+    if (newPass!==confirmPass) { toast("New passwords do not match.","error"); return; }
+    if (newPass.length<6) { toast("Password must be at least 6 characters.","error"); return; }
+    u.password=newPass; saveDB(db); toast("Password changed successfully.");
+    setOldPass(""); setNewPass(""); setConfirmPass("");
+  }
+
+  return (
+    <div>
+      <PageHeader title="Settings" subtitle="Manage your account" />
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:16 }}>
+        <Card>
+          <h3 style={{ margin:"0 0 20px", fontSize:15, fontWeight:700, color:C.gray800 }}>👤 Profile Information</h3>
+          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:24 }}>
+            <div style={{
+              width:64, height:64, borderRadius:18, background:`linear-gradient(135deg, ${C.purple}, ${C.purpleMid})`,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, color:C.white, fontWeight:800,
+            }}>{user.name[0]}</div>
+            <div>
+              <div style={{ fontWeight:700, fontSize:16, color:C.gray800 }}>{user.name}</div>
+              <div style={{ fontSize:13, color:C.gray400, textTransform:"capitalize" }}>{user.role}</div>
+            </div>
+          </div>
+          <Input label="Full Name" value={name} onChange={e=>setName(e.target.value)} />
+          <Input label="Email Address" type="email" value={email} onChange={e=>setEmail(e.target.value)} />
+          <Btn onClick={saveProfile}>Save Profile</Btn>
+        </Card>
+
+        <Card>
+          <h3 style={{ margin:"0 0 20px", fontSize:15, fontWeight:700, color:C.gray800 }}>🔐 Change Password</h3>
+          <Input label="Current Password" type="password" value={oldPass} onChange={e=>setOldPass(e.target.value)} />
+          <Input label="New Password" type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} />
+          <Input label="Confirm New Password" type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} />
+          <Btn onClick={changePassword}>Update Password</Btn>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Main App ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { toasts, show: toast } = useToast();
+
+  useEffect(() => {
+    initDB();
+    const session = getSession();
+    if (session) setUser(session);
+  }, []);
+
+  function handleLogin(u) { setUser(u); setPage("dashboard"); }
+  function handleLogout() { logout(); setUser(null); setPage("dashboard"); }
+
+  const db = getDB();
+  const unreadMsgs = user ? db.messages.filter(m=>m.receiver_id===user.id&&!m.read).length : 0;
+
+  const SIDEBAR_W = 220;
+
+  if (!user) return (
+    <>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideIn { from { transform:translateX(60px); opacity:0 } to { transform:translateX(0); opacity:1 } }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      `}</style>
+      <LoginPage onLogin={handleLogin} />
+      <ToastContainer toasts={toasts} />
+    </>
+  );
+
+  const renderPage = () => {
+    const props = { user, toast };
+    switch (page) {
+      case "dashboard":   return <DashboardPage {...props} />;
+      case "students":    return <StudentsPage {...props} />;
+      case "subjects":    return <SubjectsPage {...props} />;
+      case "timetable":   return <TimetablePage {...props} />;
+      case "assignments": return <AssignmentsPage {...props} />;
+      case "results":     return <ResultsPage {...props} />;
+      case "attendance":  return <AttendancePage {...props} />;
+      case "notices":     return <NoticesPage {...props} />;
+      case "fees":        return <FeesPage {...props} />;
+      case "messages":    return <MessagesPage {...props} />;
+      case "settings":    return <SettingsPage {...props} onUserUpdate={u=>setUser(u)} />;
+      default:            return <DashboardPage {...props} />;
+    }
+  };
+
+  return (
+    <>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideIn { from { transform:translateX(60px); opacity:0 } to { transform:translateX(0); opacity:1 } }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: ${C.gray100}; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${C.gray200}; border-radius: 3px; }
+        select { outline: none; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid ${C.purple}; outline-offset: 0; }
+      `}</style>
+
+      <Sidebar page={page} onNav={setPage} user={user} mobileOpen={sidebarOpen} onClose={()=>setSidebarOpen(false)} />
+
+      <div style={{ marginLeft: sidebarOpen ? 0 : 0, transition:"margin 0.28s" }}>
+        {/* Actual layout uses fixed sidebar */}
+        <div style={{ paddingLeft: window.innerWidth>768 ? SIDEBAR_W : 0, transition:"padding 0.28s" }}>
+          <Topbar user={user} onLogout={handleLogout} onMenuToggle={()=>setSidebarOpen(o=>!o)} unread={unreadMsgs} onNav={setPage} />
+          <main style={{ padding:"24px 20px", minHeight:"calc(100vh - 60px)", maxWidth:1200 }}>
+            {renderPage()}
+          </main>
+        </div>
+      </div>
+
+      <ToastContainer toasts={toasts} />
+    </>
+  );
+}
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+root.render(
+  React.createElement(ErrorBoundary, null,
+    React.createElement(App)
+  )
+);
+</script>
+</body>
+</html>
