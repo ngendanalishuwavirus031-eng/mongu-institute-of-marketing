@@ -487,12 +487,18 @@ function LoginPage({ onLogin }) {
   return (
     <div style={{
       minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:16,
-      backgroundImage:`linear-gradient(rgba(20,15,60,0.80), rgba(60,52,137,0.80)), url('https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Pupils_learning_in_a_classroom_in_Uganda.jpg/1280px-Pupils_learning_in_a_classroom_in_Uganda.jpg')`,
-      backgroundSize:"cover", backgroundPosition:"center", backgroundAttachment:"fixed",
+      position:"relative", overflow:"hidden",
+      background:`linear-gradient(135deg, ${C.purpleDark} 0%, ${C.purple} 50%, ${C.purpleMid} 100%)`,
     }}>
+      <img src="https://images.pexels.com/photos/8617828/pexels-photo-8617828.jpeg?auto=compress&cs=tinysrgb&w=1600"
+        alt="" style={{
+          position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover",
+          opacity:0.45, zIndex:0,
+        }} onError={(e)=>{ e.target.style.display="none"; }} />
+      <div style={{ position:"absolute", inset:0, background:"linear-gradient(135deg, rgba(20,15,60,0.55), rgba(60,52,137,0.55))", zIndex:0 }} />
       <div style={{
         background:C.white, borderRadius:20, padding:"36px 32px", width:"100%", maxWidth:420,
-        boxShadow:"0 24px 80px rgba(0,0,0,0.3)",
+        boxShadow:"0 24px 80px rgba(0,0,0,0.3)", position:"relative", zIndex:1,
       }}>
 
         {/* ── LOGIN SCREEN ── */}
@@ -1220,28 +1226,64 @@ function SubjectsPage({ user, toast }) {
 }
 
 // ── Timetable Page ────────────────────────────────────────
-function TimetablePage() {
+function TimetablePage({ user, toast }) {
   const [grade, setGrade] = useState("Grade 10");
   const [loading, setLoading] = useState(true);
   const [tt, setTt] = useState([]);
+  const [modal, setModal] = useState(false);
+  const [editingCell, setEditingCell] = useState(null);
+  const [form, setForm] = useState({ day:"Monday", period:1, start_time:"07:30", end_time:"08:30", subject_id:"", room:"", grade:"Grade 10" });
   const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
   const PERIODS = [1,2,3,4,5];
 
-  useEffect(()=>{
-    setTimeout(()=>{
-      const db = getDB();
-      setTt(db.timetable.map(t=>({
-        ...t, subjectName: db.subjects.find(s=>s.id===t.subject_id)?.name||"?"
-      })));
-      setLoading(false);
-    },300);
-  },[]);
+  function load() {
+    const db = getDB();
+    setTt(db.timetable.map(t=>({
+      ...t, subjectName: db.subjects.find(s=>s.id===t.subject_id)?.name||"?"
+    })));
+    setLoading(false);
+  }
+  useEffect(()=>{ setTimeout(load,300); },[]);
 
   const grades = ["Grade 8","Grade 9","Grade 10","Grade 11","Grade 12"];
   const filtered = tt.filter(t=>t.grade===grade);
   function getCell(day,period) {
     return filtered.find(t=>t.day===day && t.period===period);
   }
+
+  function openAddCell(day, period) {
+    setForm({ day, period, start_time:"07:30", end_time:"08:30", subject_id:"", room:"", grade });
+    setEditingCell(null);
+    setModal(true);
+  }
+  function openEditCell(cell) {
+    setForm({ day:cell.day, period:cell.period, start_time:cell.start_time, end_time:cell.end_time, subject_id:String(cell.subject_id), room:cell.room, grade:cell.grade });
+    setEditingCell(cell);
+    setModal(true);
+  }
+  function saveCell() {
+    if (!form.subject_id || !form.room) { toast("Subject and room are required.","error"); return; }
+    const db = getDB();
+    if (editingCell) {
+      const t = db.timetable.find(x=>x.id===editingCell.id);
+      if (t) { Object.assign(t, { ...form, subject_id:Number(form.subject_id), period:Number(form.period) }); }
+      toast("Timetable slot updated.");
+    } else {
+      db.timetable.push({ id:nextId(db.timetable), ...form, subject_id:Number(form.subject_id), period:Number(form.period) });
+      toast("Timetable slot added.");
+    }
+    saveDB(db); setModal(false); load();
+  }
+  function deleteCell(cell) {
+    if (!confirm(`Remove ${cell.subjectName} from ${cell.day} Period ${cell.period}?`)) return;
+    const db = getDB();
+    db.timetable = db.timetable.filter(x=>x.id!==cell.id);
+    saveDB(db); toast("Slot removed.","warn"); load();
+  }
+
+  const db2 = getDB();
+  const subjects = db2.subjects.filter(s=>s.grade===grade || s.grade==="All Grades");
+  const isAdmin = user?.role === "admin";
 
   if (loading) return <Spinner />;
   return (
@@ -1252,6 +1294,13 @@ function TimetablePage() {
           {grades.map(g=><option key={g}>{g}</option>)}
         </Select>
       </Card>
+      {isAdmin && (
+        <Card style={{ marginBottom:16, background:C.purpleFade }}>
+          <div style={{ fontSize:13, color:C.purple, fontWeight:600 }}>
+            👆 Tap any empty cell to add a class, or tap an existing class to edit/remove it.
+          </div>
+        </Card>
+      )}
       <Card>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", minWidth:600 }}>
@@ -1272,11 +1321,21 @@ function TimetablePage() {
                     return (
                       <td key={d} style={{ padding:"10px 14px", textAlign:"center" }}>
                         {cell ? (
-                          <div style={{ background:C.purpleFade, borderRadius:8, padding:"8px 10px" }}>
+                          <div onClick={()=>isAdmin && openEditCell(cell)} style={{
+                            background:C.purpleFade, borderRadius:8, padding:"8px 10px",
+                            cursor:isAdmin?"pointer":"default",
+                            border: isAdmin ? `1.5px dashed ${C.purpleMid}` : "none",
+                          }}>
                             <div style={{ fontWeight:700, fontSize:13, color:C.purple }}>{cell.subjectName}</div>
                             <div style={{ fontSize:11, color:C.gray600, marginTop:2 }}>{cell.start_time}–{cell.end_time}</div>
                             <div style={{ fontSize:11, color:C.gray400 }}>Room {cell.room}</div>
+                            {isAdmin && <div style={{ fontSize:10, color:C.purpleMid, marginTop:3 }}>✏️ Tap to edit</div>}
                           </div>
+                        ) : isAdmin ? (
+                          <button onClick={()=>openAddCell(d,p)} style={{
+                            background:"none", border:`1.5px dashed ${C.gray200}`, borderRadius:8,
+                            padding:"10px", cursor:"pointer", color:C.gray400, fontSize:18, width:"100%",
+                          }}>+</button>
                         ) : (
                           <span style={{ color:C.gray200, fontSize:12 }}>—</span>
                         )}
@@ -1289,6 +1348,42 @@ function TimetablePage() {
           </table>
         </div>
       </Card>
+
+      {modal && (
+        <Modal title={editingCell ? "Edit Timetable Slot" : "Add Timetable Slot"} onClose={()=>setModal(false)}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Select label="Day" value={form.day} onChange={e=>setForm(p=>({...p,day:e.target.value}))}>
+              {DAYS.map(d=><option key={d}>{d}</option>)}
+            </Select>
+            <Select label="Period" value={form.period} onChange={e=>setForm(p=>({...p,period:e.target.value}))}>
+              {PERIODS.map(p=><option key={p} value={p}>Period {p}</option>)}
+            </Select>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Start Time" type="time" value={form.start_time} onChange={e=>setForm(p=>({...p,start_time:e.target.value}))} />
+            <Input label="End Time" type="time" value={form.end_time} onChange={e=>setForm(p=>({...p,end_time:e.target.value}))} />
+          </div>
+          <Select label="Subject" value={form.subject_id} onChange={e=>setForm(p=>({...p,subject_id:e.target.value}))}>
+            <option value="">-- Select Subject --</option>
+            {db2.subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
+          <Input label="Room" value={form.room} onChange={e=>setForm(p=>({...p,room:e.target.value}))} placeholder="e.g. A1, Lab, B2" />
+          <Select label="Grade" value={form.grade} onChange={e=>setForm(p=>({...p,grade:e.target.value}))}>
+            {grades.map(g=><option key={g}>{g}</option>)}
+          </Select>
+          <div style={{ display:"flex", gap:10, justifyContent:"space-between", marginTop:8 }}>
+            <div>
+              {editingCell && (
+                <Btn variant="danger" onClick={()=>{ deleteCell(editingCell); setModal(false); }}>Remove Slot</Btn>
+              )}
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
+              <Btn onClick={saveCell}>{editingCell ? "Save Changes" : "Add Slot"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
