@@ -1,13 +1,21 @@
-// =========================================================================
-// PASTE YOUR FIREBASE PROJECT CONFIG BELOW
-// Get this from: Firebase Console -> Project settings -> General ->
-// "Your apps" -> Web app -> SDK setup and configuration -> Config
-// =========================================================================
-window.FIREBASE_CONFIG = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
-  projectId: "PASTE_YOUR_PROJECT_ID",
-  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId: "PASTE_YOUR_APP_ID",
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAmu-iCP5tkMZRRMJAPOLvYbBFhCAXwdT4",
+  authDomain: "mongu-institute.firebaseapp.com",
+  projectId: "mongu-institute",
+  storageBucket: "mongu-institute.firebasestorage.app",
+  messagingSenderId: "1004897805677",
+  appId: "1:1004897805677:web:82cade2f4176f920cbe664",
+  measurementId: "G-VBR6CN36FW"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
