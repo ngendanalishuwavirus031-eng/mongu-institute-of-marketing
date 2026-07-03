@@ -22,6 +22,17 @@
     box.textContent = 'Something went wrong loading the portal:\n\n' + (e.error ? (e.error.stack || e.error.message) : e.message);
   });
 </script>
+
+<!-- 1. Your Firebase project keys -->
+<script src="firebase-config.js"></script>
+
+<!-- 2. Firebase SDK bridge (real auth + real database) -->
+<script type="module" src="firebase-bridge.js"></script>
+
+<!-- 3. Jitsi Meet SDK (real, free video calls) -->
+<script src="https://meet.jit.si/external_api.js"></script>
+
+<!-- 4. The compiled portal app -->
 <script src="bundle.js"></script>
 </body>
 </html>
