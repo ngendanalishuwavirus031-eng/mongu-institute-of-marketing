@@ -7,7 +7,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut,
+  onAuthStateChanged, signOut, EmailAuthProvider, reauthenticateWithCredential,
+  updatePassword,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
@@ -79,6 +80,14 @@ const FirebaseAPI = {
 
   async signOutUser() {
     return signOut(auth);
+  },
+
+  async changePassword({ currentPassword, newPassword }) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("You must be signed in to change your password.");
+    const cred = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, cred);
+    return updatePassword(user, newPassword);
   },
 
   // ---------------- FIRESTORE: generic ----------------
