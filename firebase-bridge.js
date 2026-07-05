@@ -92,9 +92,11 @@ const FirebaseAPI = {
 
   // ---------------- FIRESTORE: generic ----------------
   subDoc(path, callback) {
-    return onSnapshot(docRef(path), (snap) => {
-      callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-    });
+    return onSnapshot(
+      docRef(path),
+      (snap) => callback(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+      (err) => window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path, err } }))
+    );
   },
 
   subCollection(path, callback, opts) {
@@ -103,9 +105,11 @@ const FirebaseAPI = {
     if (opts && opts.where) clauses.push(where(...opts.where));
     if (opts && opts.orderBy) clauses.push(orderBy(...opts.orderBy));
     if (clauses.length) q = query(collRef(path), ...clauses);
-    return onSnapshot(q, (snap) => {
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path, err } }))
+    );
   },
 
   async getOnce(path, opts) {

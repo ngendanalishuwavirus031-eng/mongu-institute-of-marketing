@@ -16,10 +16,25 @@
 <div id="root"></div>
 <div id="build-error"></div>
 <script>
-  window.addEventListener('error', function (e) {
+  var seenErrors = new Set();
+  function showError(text) {
     var box = document.getElementById('build-error');
     box.style.display = 'block';
-    box.textContent = 'Something went wrong loading the portal:\n\n' + (e.error ? (e.error.stack || e.error.message) : e.message);
+    if (seenErrors.has(text)) return;
+    seenErrors.add(text);
+    var line = document.createElement('div');
+    line.style.marginBottom = '14px';
+    line.style.paddingBottom = '14px';
+    line.style.borderBottom = '1px solid #fecaca';
+    line.textContent = text;
+    box.appendChild(line);
+  }
+  window.addEventListener('error', function (e) {
+    showError('Script error:\n' + (e.error ? (e.error.stack || e.error.message) : e.message));
+  });
+  window.addEventListener('firebase-error', function (e) {
+    var d = e.detail;
+    showError('Firestore error on "' + d.path + '":\n' + d.err.code + ' — ' + d.err.message);
   });
 </script>
 
