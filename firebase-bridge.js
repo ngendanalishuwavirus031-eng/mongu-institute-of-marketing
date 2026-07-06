@@ -4,7 +4,7 @@
 // window.FirebaseAPI so the compiled app bundle (bundle.js) can use it
 // without needing its own copy of the Firebase SDK bundled in.
 // =========================================================================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   onAuthStateChanged, signOut, EmailAuthProvider, reauthenticateWithCredential,
@@ -12,7 +12,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  collection, onSnapshot, query, where, orderBy, serverTimestamp, increment,
+  collection, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(window.FIREBASE_CONFIG);
@@ -80,6 +80,39 @@ const FirebaseAPI = {
 
   async signOutUser() {
     return signOut(auth);
+  },
+
+  // Lets an Admin create a Student/Lecturer/Admin account without being
+  // signed out themselves — uses a temporary secondary Firebase app instance.
+  async adminCreateAccount({ email, password, name, role, studentId, staffId, programmeId }) {
+    const secondaryApp = initializeApp(window.FIREBASE_CONFIG, "Secondary-" + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const uid = cred.user.uid;
+      const profile = {
+        name, email, role,
+        studentId: studentId || null, staffId: staffId || null, programmeId: programmeId || null,
+        createdAt: serverTimestamp(),
+      };
+      await setDoc(docRef(`users/${uid}`), profile);
+      if (role === "student" && programmeId) {
+        const progSnap = await getDoc(docRef(`programmes/${programmeId}`));
+        const prog = progSnap.exists() ? progSnap.data() : null;
+        const generalSnap = await getDoc(docRef("config/fees"));
+        const generalTotal = generalSnap.exists() ? (generalSnap.data().items || []).reduce((s, f) => s + f.amount, 0) : 0;
+        const billed = prog ? prog.fee + prog.reg + (prog.admin || 0) + generalTotal : 0;
+        await setDoc(docRef(`fees/${uid}`), { billed, balance: billed, programmeId, studentName: name, studentId: studentId || null });
+      }
+      await signOut(secondaryAuth);
+      return { uid, ...profile };
+    } finally {
+      await deleteApp(secondaryApp);
+    }
+  },
+
+  arrayUnion(value) {
+    return arrayUnion(value);
   },
 
   async changePassword({ currentPassword, newPassword }) {
