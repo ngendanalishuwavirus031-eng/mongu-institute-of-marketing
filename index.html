@@ -41,14 +41,15 @@
 <!-- 1. Your Firebase project keys -->
 <script src="firebase-config.js"></script>
 
-<!-- 2. Firebase SDK bridge (real auth + real database) -->
+<!-- 2. Firebase SDK bridge (real auth + real database + storage) -->
 <script type="module" src="firebase-bridge.js"></script>
 
-<!-- 3. Jitsi Meet SDK (real, free video calls) -->
-<script src="https://meet.jit.si/external_api.js"></script>
+<!-- 3. React (no build step — Babel transforms JSX right in the browser) -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-<!-- 4. The compiled portal app -->
-  <script>window.BUILD_TAG = "1.0.0";</script>
-<script src="bundle.js"></script>
+<!-- 4. The portal app (plain, readable source — edit this file directly) -->
+<script type="text/babel" src="app.js"></script>
 </body>
 </html>

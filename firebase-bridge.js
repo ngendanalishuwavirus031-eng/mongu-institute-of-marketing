@@ -1,8 +1,7 @@
 // =========================================================================
-// Firebase bridge — loads the real Firebase SDK (Auth + Firestore) from
-// Google's official CDN and exposes a small, plain-JS API on
-// window.FirebaseAPI so the compiled app bundle (bundle.js) can use it
-// without needing its own copy of the Firebase SDK bundled in.
+// Firebase bridge — loads the real Firebase SDK (Auth + Firestore + Storage)
+// from Google's official CDN and exposes a small, plain-JS API on
+// window.FirebaseAPI so app.js can use it without a build step.
 // =========================================================================
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
@@ -12,12 +11,16 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  collection, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion,
+  collection, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion, arrayRemove,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const app = initializeApp(window.FIREBASE_CONFIG);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 function segs(path) {
   return path.split("/").filter(Boolean);
@@ -32,6 +35,20 @@ function collRef(path) {
 async function getUserProfile(uid) {
   const snap = await getDoc(docRef(`users/${uid}`));
   return snap.exists() ? { uid, ...snap.data() } : null;
+}
+
+async function billStudent({ uid, name, studentId, programmeId }) {
+  if (!programmeId) return;
+  const progSnap = await getDoc(docRef(`programmes/${programmeId}`));
+  const prog = progSnap.exists() ? progSnap.data() : null;
+  const generalSnap = await getDoc(docRef("config/fees"));
+  const generalTotal = generalSnap.exists()
+    ? (generalSnap.data().items || []).reduce((s, f) => s + f.amount, 0)
+    : 0;
+  const billed = prog ? prog.fee + prog.reg + (prog.admin || 0) + generalTotal : 0;
+  await setDoc(docRef(`fees/${uid}`), {
+    billed, balance: billed, programmeId, studentName: name, studentId: studentId || null, payments: [],
+  });
 }
 
 const FirebaseAPI = {
@@ -53,23 +70,13 @@ const FirebaseAPI = {
       name, email, role,
       studentId: studentId || null,
       staffId: staffId || null,
+      examNumber: null,
       programmeId: programmeId || null,
+      photoURL: null,
       createdAt: serverTimestamp(),
     };
     await setDoc(docRef(`users/${uid}`), profile);
-
-    if (role === "student" && programmeId) {
-      const progSnap = await getDoc(docRef(`programmes/${programmeId}`));
-      const prog = progSnap.exists() ? progSnap.data() : null;
-      const generalSnap = await getDoc(docRef("config/fees"));
-      const generalTotal = generalSnap.exists()
-        ? (generalSnap.data().items || []).reduce((s, f) => s + f.amount, 0)
-        : 0;
-      const billed = prog ? prog.fee + prog.reg + (prog.admin || 0) + generalTotal : 0;
-      await setDoc(docRef(`fees/${uid}`), {
-        billed, balance: billed, programmeId, studentName: name, studentId: studentId || null,
-      });
-    }
+    if (role === "student") await billStudent({ uid, name, studentId, programmeId });
     return { uid, ...profile };
   },
 
@@ -82,8 +89,8 @@ const FirebaseAPI = {
     return signOut(auth);
   },
 
-  // Lets an Admin create a Student/Lecturer/Admin account without being
-  // signed out themselves — uses a temporary secondary Firebase app instance.
+  // Lets an Admin create a Lecturer/Student/Admin/Bursar account without
+  // being signed out themselves — uses a temporary secondary Firebase app.
   async adminCreateAccount({ email, password, name, role, studentId, staffId, programmeId }) {
     const secondaryApp = initializeApp(window.FIREBASE_CONFIG, "Secondary-" + Date.now());
     const secondaryAuth = getAuth(secondaryApp);
@@ -92,18 +99,12 @@ const FirebaseAPI = {
       const uid = cred.user.uid;
       const profile = {
         name, email, role,
-        studentId: studentId || null, staffId: staffId || null, programmeId: programmeId || null,
+        studentId: studentId || null, staffId: staffId || null, examNumber: null,
+        programmeId: programmeId || null, photoURL: null,
         createdAt: serverTimestamp(),
       };
       await setDoc(docRef(`users/${uid}`), profile);
-      if (role === "student" && programmeId) {
-        const progSnap = await getDoc(docRef(`programmes/${programmeId}`));
-        const prog = progSnap.exists() ? progSnap.data() : null;
-        const generalSnap = await getDoc(docRef("config/fees"));
-        const generalTotal = generalSnap.exists() ? (generalSnap.data().items || []).reduce((s, f) => s + f.amount, 0) : 0;
-        const billed = prog ? prog.fee + prog.reg + (prog.admin || 0) + generalTotal : 0;
-        await setDoc(docRef(`fees/${uid}`), { billed, balance: billed, programmeId, studentName: name, studentId: studentId || null });
-      }
+      if (role === "student") await billStudent({ uid, name, studentId, programmeId });
       await signOut(secondaryAuth);
       return { uid, ...profile };
     } finally {
@@ -111,9 +112,16 @@ const FirebaseAPI = {
     }
   },
 
-  arrayUnion(value) {
-    return arrayUnion(value);
+  // Admin "deletes" a user's access (removes their Firestore profile so the
+  // app treats them as gone). Their Auth login record can only be fully
+  // removed from the Firebase Console or a backend Admin SDK — deleting the
+  // profile here is enough to lock them out of the portal.
+  async deleteUserProfile(uid) {
+    await deleteDoc(docRef(`users/${uid}`));
   },
+
+  arrayUnion(value) { return arrayUnion(value); },
+  arrayRemove(value) { return arrayRemove(value); },
 
   async changePassword({ currentPassword, newPassword }) {
     const user = auth.currentUser;
@@ -121,6 +129,16 @@ const FirebaseAPI = {
     const cred = EmailAuthProvider.credential(user.email, currentPassword);
     await reauthenticateWithCredential(user, cred);
     return updatePassword(user, newPassword);
+  },
+
+  // ---------------- STORAGE ----------------
+  async uploadFile(path, file) {
+    const r = ref(storage, path);
+    await uploadBytes(r, file);
+    return getDownloadURL(r);
+  },
+  async deleteFile(path) {
+    try { await deleteObject(ref(storage, path)); } catch (e) { /* ignore if missing */ }
   },
 
   // ---------------- FIRESTORE: generic ----------------
@@ -159,8 +177,8 @@ const FirebaseAPI = {
     return setDoc(docRef(path), data, { merge });
   },
   async addDoc(collPath, data) {
-    const ref = await addDoc(collRef(collPath), data);
-    return ref.id;
+    const ref2 = await addDoc(collRef(collPath), data);
+    return ref2.id;
   },
   async updateDoc(path, data) {
     return updateDoc(docRef(path), data);
@@ -168,12 +186,8 @@ const FirebaseAPI = {
   async deleteDoc(path) {
     return deleteDoc(docRef(path));
   },
-  increment(n) {
-    return increment(n);
-  },
-  serverTimestamp() {
-    return serverTimestamp();
-  },
+  increment(n) { return increment(n); },
+  serverTimestamp() { return serverTimestamp(); },
 };
 
 window.FirebaseAPI = FirebaseAPI;
