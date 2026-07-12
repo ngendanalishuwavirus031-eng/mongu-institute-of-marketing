@@ -9,12 +9,12 @@
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
   html, body { margin: 0; padding: 0; background: #F6F3EA; font-family: 'Inter', sans-serif; }
   .font-serif { font-family: 'Fraunces', serif; }
-  #build-error { display:none; font-family: monospace; white-space: pre-wrap; padding: 20px; color: #b91c1c; background: #fef2f2; }
+  #build-error { display:none; position: sticky; top: 0; z-index: 9999; font-family: monospace; font-size: 13px; white-space: pre-wrap; padding: 16px; color: #7f1d1d; background: #fef2f2; border-bottom: 3px solid #dc2626; max-height: 50vh; overflow-y: auto; }
 </style>
 </head>
 <body>
-<div id="root"></div>
 <div id="build-error"></div>
+<div id="root"></div>
 <script>
   var seenErrors = new Set();
   function showError(text) {
@@ -31,6 +31,10 @@
   }
   window.addEventListener('error', function (e) {
     showError('Script error:\n' + (e.error ? (e.error.stack || e.error.message) : e.message));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    showError('Unhandled error:\n' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
   });
   window.addEventListener('firebase-error', function (e) {
     var d = e.detail;

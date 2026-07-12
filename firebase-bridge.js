@@ -58,8 +58,17 @@ const FirebaseAPI = {
   onAuth(callback) {
     return onAuthStateChanged(auth, async (user) => {
       if (!user) return callback(null);
-      const profile = await getUserProfile(user.uid);
-      callback(profile);
+      try {
+        const profile = await getUserProfile(user.uid);
+        if (!profile) {
+          window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path: "users/" + user.uid, err: { code: "not-found", message: "Signed in, but no profile document exists for this account in the users collection." } } }));
+          return callback(null);
+        }
+        callback(profile);
+      } catch (err) {
+        window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path: "users/" + user.uid, err } }));
+        callback(null);
+      }
     });
   },
 
