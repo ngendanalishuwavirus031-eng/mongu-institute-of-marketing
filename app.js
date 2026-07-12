@@ -238,25 +238,56 @@ function Shell({ user, page, setPage, children }) {
 }
 
 // =============================================================== ADMIN ====
-function AdminOverview({ users, courses, fees }) {
+function AdminOverview({ users, courses, fees, results, assignments, announcements }) {
   const counts = useMemo(() => {
     const c = { admin: 0, lecturer: 0, student: 0, bursar: 0 };
     users.forEach((u) => { if (c[u.role] !== undefined) c[u.role]++; });
     return c;
   }, [users]);
+  const totalBilled = fees.reduce((s, f) => s + (f.billed || 0), 0);
   const totalBalance = fees.reduce((s, f) => s + (f.balance || 0), 0);
-  const Card = ({ label, value }) => (
-    <div className="bg-white rounded-xl p-5 shadow-sm border">
-      <div className="text-2xl font-serif font-semibold" style={{ color: NAVY }}>{value}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
+  const totalCollected = totalBilled - totalBalance;
+  const studentsCleared = fees.filter((f) => (f.balance || 0) <= 0).length;
+  const quizCount = assignments.filter((a) => a.kind === "quiz").length;
+  const assignmentCount = assignments.filter((a) => a.kind === "assignment").length;
+
+  const Card = ({ label, value, icon, accent }) => (
+    <div className="bg-white rounded-xl p-5 shadow-sm border flex items-start gap-3">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0" style={{ background: (accent || GOLD) + "22" }}>
+        {icon}
+      </div>
+      <div>
+        <div className="text-2xl font-serif font-semibold leading-tight" style={{ color: NAVY }}>{value}</div>
+        <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+      </div>
     </div>
   );
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Card label="Students" value={counts.student} />
-      <Card label="Lecturers" value={counts.lecturer} />
-      <Card label="Courses" value={courses.length} />
-      <Card label="Outstanding fees (K)" value={totalBalance.toLocaleString()} />
+    <div>
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">People</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Card label="Students" value={counts.student} icon="🎓" />
+        <Card label="Lecturers" value={counts.lecturer} icon="🧑‍🏫" />
+        <Card label="Bursars" value={counts.bursar} icon="💼" />
+        <Card label="Courses" value={courses.length} icon="📚" />
+      </div>
+
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Fees</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Card label="Total billed (K)" value={totalBilled.toLocaleString()} icon="🧾" />
+        <Card label="Fees collected (K)" value={totalCollected.toLocaleString()} icon="✅" accent="#16a34a" />
+        <Card label="Outstanding (K)" value={totalBalance.toLocaleString()} icon="⚠️" accent="#dc2626" />
+        <Card label="Students cleared" value={`${studentsCleared}/${fees.length}`} icon="📋" />
+      </div>
+
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Academics</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card label="Assignments posted" value={assignmentCount} icon="📝" />
+        <Card label="Quizzes posted" value={quizCount} icon="❓" />
+        <Card label="Results entered" value={results.length} icon="📊" />
+        <Card label="Announcements" value={announcements.length} icon="📣" />
+      </div>
     </div>
   );
 }
@@ -889,7 +920,7 @@ function Dashboard({ user }) {
 
   let content = null;
   if (user.role === "admin") {
-    if (page === "overview") content = <AdminOverview users={users} courses={courses} fees={fees} />;
+    if (page === "overview") content = <AdminOverview users={users} courses={courses} fees={fees} results={results} assignments={assignments} announcements={announcements} />;
     if (page === "users") content = <AdminUsers users={users} programmes={programmes} />;
     if (page === "courses") content = <AdminCourses courses={courses} users={users} programmes={programmes} />;
     if (page === "fees") content = <FeesTable fees={fees} editable />;
