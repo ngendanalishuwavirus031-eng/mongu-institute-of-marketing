@@ -76,28 +76,15 @@ const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm foc
 
 // ------------------------------------------------------------- Login ------
 function LoginScreen() {
-  const [mode, setMode] = useState("login");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [programmes, setProgrammes] = useState([]);
-  const [form, setForm] = useState({ email: "", password: "", name: "", studentId: "", programmeId: "" });
-
-  useEffect(() => {
-    FB().getOnce("programmes").then(setProgrammes).catch(() => {});
-  }, []);
+  const [form, setForm] = useState({ email: "", password: "" });
 
   async function submit(e) {
     e.preventDefault();
     setErr(""); setBusy(true);
     try {
-      if (mode === "login") {
-        await FB().signIn({ email: form.email, password: form.password });
-      } else {
-        await FB().signUp({
-          email: form.email, password: form.password, name: form.name,
-          role: "student", studentId: form.studentId, programmeId: form.programmeId,
-        });
-      }
+      await FB().signIn({ email: form.email, password: form.password });
     } catch (e2) {
       setErr(e2.message.replace("Firebase: ", ""));
     } finally {
@@ -114,28 +101,7 @@ function LoginScreen() {
           <p className="text-xs text-gray-500 mt-1">Student & Staff Portal</p>
         </div>
 
-        <div className="flex mb-5 rounded-lg overflow-hidden border border-gray-200 text-sm">
-          <button onClick={() => setMode("login")} className={cx("flex-1 py-2", mode === "login" ? "text-white" : "text-gray-600")} style={mode === "login" ? { background: NAVY } : {}}>Sign in</button>
-          <button onClick={() => setMode("signup")} className={cx("flex-1 py-2", mode === "signup" ? "text-white" : "text-gray-600")} style={mode === "signup" ? { background: NAVY } : {}}>New student</button>
-        </div>
-
         <form onSubmit={submit}>
-          {mode === "signup" && (
-            <>
-              <Field label="Full name">
-                <input required className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </Field>
-              <Field label="Student number (if issued)">
-                <input className={inputCls} value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} />
-              </Field>
-              <Field label="Programme">
-                <select required className={inputCls} value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })}>
-                  <option value="">Select programme</option>
-                  {programmes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </Field>
-            </>
-          )}
           <Field label="Email">
             <input type="email" required className={inputCls} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </Field>
@@ -144,10 +110,10 @@ function LoginScreen() {
           </Field>
           {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
           <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: NAVY }}>
-            {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
+            {busy ? "Please wait…" : "Sign in"}
           </button>
         </form>
-        <p className="text-[11px] text-gray-400 text-center mt-5">Lecturer, Bursar and Admin accounts are created by the Administrator.</p>
+        <p className="text-[11px] text-gray-400 text-center mt-5">All accounts — student, lecturer, bursar, admin — are created by the Administrator.</p>
       </div>
     </div>
   );
