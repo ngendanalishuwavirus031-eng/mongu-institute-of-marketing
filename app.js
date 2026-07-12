@@ -350,6 +350,7 @@ function AdminUsers({ users, programmes }) {
 
 function AdminCourses({ courses, users, programmes }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [assignCourse, setAssignCourse] = useState(null);
   const [form, setForm] = useState({ name: "", code: "", programmeId: "", lecturerId: "" });
   const lecturers = users.filter((u) => u.role === "lecturer");
 
@@ -357,6 +358,11 @@ function AdminCourses({ courses, users, programmes }) {
     e.preventDefault();
     await FB().addDoc("courses", { ...form, studentIds: [], createdAt: FB().serverTimestamp() });
     setShowAdd(false); setForm({ name: "", code: "", programmeId: "", lecturerId: "" });
+  }
+
+  async function saveLecturer(courseId, lecturerId) {
+    await FB().updateDoc(`courses/${courseId}`, { lecturerId: lecturerId || null });
+    setAssignCourse(null);
   }
 
   return (
@@ -372,7 +378,10 @@ function AdminCourses({ courses, users, programmes }) {
             <div key={c.id} className="bg-white rounded-xl border p-4">
               <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
               <p className="text-xs text-gray-500 mt-1">Lecturer: {lec ? lec.name : "Unassigned"}</p>
-              <p className="text-xs text-gray-500">Students enrolled: {(c.studentIds || []).length}</p>
+              <p className="text-xs text-gray-500 mb-3">Students enrolled: {(c.studentIds || []).length}</p>
+              <button onClick={() => setAssignCourse(c)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
+                {lec ? "Change lecturer" : "Assign lecturer"}
+              </button>
             </div>
           );
         })}
@@ -396,6 +405,18 @@ function AdminCourses({ courses, users, programmes }) {
           </form>
         </Modal>
       )}
+      {assignCourse && (
+        <Modal title={`Assign lecturer — ${assignCourse.name}`} onClose={() => setAssignCourse(null)}>
+          <Field label="Lecturer">
+            <select className={inputCls} defaultValue={assignCourse.lecturerId || ""} onChange={(e) => saveLecturer(assignCourse.id, e.target.value)}>
+              <option value="">Unassigned</option>
+              {lecturers.map((l) => <option key={l.uid} value={l.uid}>{l.name}</option>)}
+            </select>
+          </Field>
+          {lecturers.length === 0 && <p className="text-xs text-gray-400 mt-1">No lecturer accounts exist yet — add one under Manage Users first.</p>}
+        </Modal>
+      )}
+
     </div>
   );
 }
