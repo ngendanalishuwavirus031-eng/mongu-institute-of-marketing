@@ -192,6 +192,11 @@ function Shell({ user, page, setPage, children }) {
           <div className="text-[11px] text-white/50 capitalize">{user.role} dashboard</div>
         </div>
         <nav className="flex-1 py-3">
+          {items.length === 0 && (
+            <p className="px-5 text-xs text-white/50">
+              No menu found for role "{user.role || "(none)"}". Ask the Administrator to check this account's role in the Users list.
+            </p>
+          )}
           {items.map(([key, label]) => (
             <button key={key} onClick={() => setPage(key)}
               className={cx("w-full text-left px-5 py-2.5 text-sm", page === key ? "bg-white/10 border-l-2" : "text-white/70 hover:bg-white/5")}

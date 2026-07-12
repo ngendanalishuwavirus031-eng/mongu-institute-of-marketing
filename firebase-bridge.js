@@ -34,7 +34,10 @@ function collRef(path) {
 
 async function getUserProfile(uid) {
   const snap = await getDoc(docRef(`users/${uid}`));
-  return snap.exists() ? { uid, ...snap.data() } : null;
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  const role = (data.role || "").toString().trim().toLowerCase();
+  return { uid, ...data, role };
 }
 
 async function billStudent({ uid, name, studentId, programmeId }) {
