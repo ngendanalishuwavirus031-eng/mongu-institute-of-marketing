@@ -726,16 +726,20 @@ function LecturerNotes({ myCourses, notes }) {
   const [form, setForm] = useState({ courseId: "", title: "" });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   async function add(e) {
     e.preventDefault();
-    if (!file) return;
+    setErr("");
+    if (!file) { setErr("Please choose a file first — tap \"Choose file\" below and pick a document from your phone."); return; }
     setBusy(true);
     try {
       const path = `notes/${form.courseId}/${Date.now()}-${file.name}`;
       const url = await FB().uploadFile(path, file);
       await FB().addDoc("notes", { ...form, fileURL: url, fileName: file.name, storagePath: path, uploadedAt: FB().serverTimestamp() });
       setShowAdd(false); setForm({ courseId: "", title: "" }); setFile(null);
+    } catch (e2) {
+      setErr(e2.message || "Upload failed. Please try again.");
     } finally { setBusy(false); }
   }
 
@@ -764,9 +768,14 @@ function LecturerNotes({ myCourses, notes }) {
               </select>
             </Field>
             <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="File"><input required type="file" onChange={(e) => setFile(e.target.files[0])} /></Field>
+            <Field label="File">
+              <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+              {file && <p className="text-xs text-green-600 mt-1">Selected: {file.name}</p>}
+            </Field>
+            {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
             <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>{busy ? "Uploading…" : "Upload"}</button>
           </form>
+
         </Modal>
       )}
     </div>
