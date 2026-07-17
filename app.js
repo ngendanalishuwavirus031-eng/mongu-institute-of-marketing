@@ -203,6 +203,7 @@ function ProfileModal({ user, onClose }) {
 const NAV_ITEMS = {
   admin: [
     ["overview", "Overview"], ["users", "Manage Users"], ["courses", "Courses"],
+    ["programmes", "Programmes & Fees"],
     ["fees", "Fees Overview"], ["results", "Results"], ["announcements", "Announcements"],
   ],
   lecturer: [
@@ -516,6 +517,155 @@ function AdminCourses({ courses, users, programmes }) {
         </Modal>
       )}
 
+    </div>
+  );
+}
+
+const BROCHURE_GENERAL_FEES = [
+  { name: "Transport", amount: 500 },
+  { name: "Library Fee", amount: 350 },
+  { name: "T-Shirt", amount: 210 },
+  { name: "Medical Fee", amount: 200 },
+  { name: "ID", amount: 150 },
+];
+
+function AdminProgrammes({ programmes }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editProg, setEditProg] = useState(null);
+  const [delProg, setDelProg] = useState(null);
+  const [pForm, setPForm] = useState({ name: "", duration: "", entryQualifications: "", fee: "", reg: "", admin: "" });
+
+  const [generalFees, setGeneralFees] = useState(null); // null = loading
+  const [gfVersionless, setGfVersionless] = useState(false); // config/fees doc may not exist yet
+  const [showAddFee, setShowAddFee] = useState(false);
+  const [feeForm, setFeeForm] = useState({ name: "", amount: "" });
+  const [gfBusy, setGfBusy] = useState(false);
+
+  useEffect(() => {
+    const unsub = FB().subDoc("config/fees", (doc) => {
+      setGeneralFees(doc ? (doc.items || []) : []);
+      setGfVersionless(!doc);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  async function saveProgramme(e) {
+    e.preventDefault();
+    const data = {
+      name: pForm.name, duration: pForm.duration, entryQualifications: pForm.entryQualifications,
+      fee: Number(pForm.fee) || 0, reg: Number(pForm.reg) || 0, admin: Number(pForm.admin) || 0,
+    };
+    if (editProg) await FB().updateDoc(`programmes/${editProg.id}`, data);
+    else await FB().addDoc("programmes", data);
+    setShowAdd(false); setEditProg(null);
+    setPForm({ name: "", duration: "", entryQualifications: "", fee: "", reg: "", admin: "" });
+  }
+
+  function openEdit(p) {
+    setEditProg(p);
+    setPForm({ name: p.name || "", duration: p.duration || "", entryQualifications: p.entryQualifications || "", fee: p.fee || "", reg: p.reg || "", admin: p.admin || "" });
+    setShowAdd(true);
+  }
+
+  async function saveGeneralFees(items) {
+    setGfBusy(true);
+    try {
+      await FB().setDoc("config/fees", { items });
+      setGeneralFees(items);
+    } finally { setGfBusy(false); }
+  }
+
+  async function addFeeItem(e) {
+    e.preventDefault();
+    const amt = Number(feeForm.amount);
+    if (!feeForm.name || !amt) return;
+    await saveGeneralFees([...(generalFees || []), { name: feeForm.name, amount: amt }]);
+    setFeeForm({ name: "", amount: "" }); setShowAddFee(false);
+  }
+  async function removeFeeItem(idx) {
+    await saveGeneralFees((generalFees || []).filter((_, i) => i !== idx));
+  }
+  async function loadBrochureDefaults() {
+    await saveGeneralFees(BROCHURE_GENERAL_FEES);
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Programmes</p>
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-3">
+        <p className="text-sm text-gray-500">{programmes.length} programmes</p>
+        <button onClick={() => { setEditProg(null); setPForm({ name: "", duration: "", entryQualifications: "", fee: "", reg: "", admin: "" }); setShowAdd(true); }}
+          className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add programme</button>
+      </div>
+      <div className="space-y-2 mb-8">
+        {programmes.map((p) => (
+          <div key={p.id} className="bg-white rounded-xl border p-4">
+            <div className="flex justify-between items-start gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-sm">{p.name}</div>
+                <div className="text-xs text-gray-500">{p.duration}{p.entryQualifications ? ` · ${p.entryQualifications}` : ""}</div>
+              </div>
+              <button onClick={() => openEdit(p)} className="shrink-0 text-xs" style={{ color: NAVY }}>Edit</button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-3 text-xs text-center border-t pt-3">
+              <div><span className="text-gray-400 block">Fee/term</span><span className="font-medium">K{(p.fee || 0).toLocaleString()}</span></div>
+              <div><span className="text-gray-400 block">Registration</span><span className="font-medium">K{(p.reg || 0).toLocaleString()}</span></div>
+              <div><span className="text-gray-400 block">Admin fee</span><span className="font-medium">K{(p.admin || 0).toLocaleString()}</span></div>
+            </div>
+          </div>
+        ))}
+        {programmes.length === 0 && <p className="text-sm text-gray-400">No programmes yet — add your first one above.</p>}
+      </div>
+
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">General fees (billed to every student)</p>
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-3">
+        <p className="text-sm text-gray-500">{generalFees === null ? "Loading…" : `${generalFees.length} items`}</p>
+        <div className="flex gap-2">
+          {generalFees && generalFees.length === 0 && (
+            <button onClick={loadBrochureDefaults} disabled={gfBusy} className="px-3 py-2 rounded-lg text-xs border" style={{ borderColor: NAVY, color: NAVY }}>Load brochure defaults</button>
+          )}
+          <button onClick={() => setShowAddFee(true)} className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add fee item</button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {(generalFees || []).map((f, idx) => (
+          <div key={idx} className="bg-white rounded-xl border p-3 flex justify-between items-center">
+            <span className="text-sm">{f.name}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium">K{f.amount.toLocaleString()}</span>
+              <button onClick={() => removeFeeItem(idx)} className="text-xs text-red-500">Remove</button>
+            </div>
+          </div>
+        ))}
+        {generalFees && generalFees.length === 0 && <p className="text-sm text-gray-400">No general fee items yet — e.g. Transport, Library, T-Shirt, Medical, ID.</p>}
+      </div>
+      <p className="text-xs text-gray-400 mt-2">Note: these apply to new students at signup. Changing this list won't retroactively change bills already issued.</p>
+
+      {showAdd && (
+        <Modal title={editProg ? "Edit programme" : "Add programme"} onClose={() => setShowAdd(false)}>
+          <form onSubmit={saveProgramme}>
+            <Field label="Programme name"><input required className={inputCls} value={pForm.name} onChange={(e) => setPForm({ ...pForm, name: e.target.value })} /></Field>
+            <Field label="Duration"><input placeholder="e.g. 3 years Full time" className={inputCls} value={pForm.duration} onChange={(e) => setPForm({ ...pForm, duration: e.target.value })} /></Field>
+            <Field label="Entry qualifications"><input placeholder="e.g. 5 Credits including English" className={inputCls} value={pForm.entryQualifications} onChange={(e) => setPForm({ ...pForm, entryQualifications: e.target.value })} /></Field>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Fee/term (K)"><input type="number" className={inputCls} value={pForm.fee} onChange={(e) => setPForm({ ...pForm, fee: e.target.value })} /></Field>
+              <Field label="Registration (K)"><input type="number" className={inputCls} value={pForm.reg} onChange={(e) => setPForm({ ...pForm, reg: e.target.value })} /></Field>
+              <Field label="Admin fee (K)"><input type="number" className={inputCls} value={pForm.admin} onChange={(e) => setPForm({ ...pForm, admin: e.target.value })} /></Field>
+            </div>
+            <button className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>{editProg ? "Save changes" : "Create programme"}</button>
+          </form>
+        </Modal>
+      )}
+
+      {showAddFee && (
+        <Modal title="Add general fee item" onClose={() => setShowAddFee(false)}>
+          <form onSubmit={addFeeItem}>
+            <Field label="Fee name"><input required placeholder="e.g. Library Fee" className={inputCls} value={feeForm.name} onChange={(e) => setFeeForm({ ...feeForm, name: e.target.value })} /></Field>
+            <Field label="Amount (K)"><input required type="number" className={inputCls} value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })} /></Field>
+            <button disabled={gfBusy} className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>{gfBusy ? "Saving…" : "Add item"}</button>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1017,6 +1167,7 @@ function Dashboard({ user }) {
     if (page === "overview") content = <AdminOverview users={users} courses={courses} fees={fees} results={results} assignments={assignments} announcements={announcements} />;
     if (page === "users") content = <AdminUsers users={users} programmes={programmes} />;
     if (page === "courses") content = <AdminCourses courses={courses} users={users} programmes={programmes} />;
+    if (page === "programmes") content = <AdminProgrammes programmes={programmes} />;
     if (page === "fees") content = <FeesPage fees={fees} />;
     if (page === "results") content = <ResultsTable results={results} showStudent />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements} courses={courses} canPost postScope="choose" currentUser={user} />;
