@@ -260,7 +260,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-17.4</p>
         </div>
       </aside>
 
@@ -361,6 +361,9 @@ function AdminOverview({ users, courses, fees, results, assignments, announcemen
 function AdminUsers({ users, programmes }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editErr, setEditErr] = useState("");
   const [delUser, setDelUser] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "student", staffId: "", studentId: "", programmeId: "" });
   const [busy, setBusy] = useState(false);
@@ -380,6 +383,26 @@ function AdminUsers({ users, programmes }) {
     await FB().setDoc(`users/${u.uid}`, { examNumber: val });
   }
 
+  function openEdit(u) {
+    setEditUser(u);
+    setEditForm({ name: u.name || "", studentId: u.studentId || "", staffId: u.staffId || "", programmeId: u.programmeId || "" });
+    setEditErr("");
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault(); setEditBusy(true); setEditErr("");
+    try {
+      await FB().setDoc(`users/${editUser.uid}`, {
+        name: editForm.name,
+        studentId: editUser.role === "student" ? editForm.studentId : editUser.studentId || null,
+        programmeId: editUser.role === "student" ? editForm.programmeId : editUser.programmeId || null,
+        staffId: editUser.role !== "student" ? editForm.staffId : editUser.staffId || null,
+      });
+      setEditUser(null);
+    } catch (e2) { setEditErr(e2.message); }
+    finally { setEditBusy(false); }
+  }
+
   return (
     <div>
       <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
@@ -395,7 +418,10 @@ function AdminUsers({ users, programmes }) {
                 <div className="text-xs text-gray-400 truncate">{u.email}</div>
                 <div className="text-xs text-gray-500 capitalize mt-0.5">{u.role}{u.studentId ? ` · ${u.studentId}` : ""}</div>
               </div>
-              <button onClick={() => setDelUser(u)} className="shrink-0 text-red-500 text-xs hover:underline">Delete</button>
+              <div className="shrink-0 flex gap-3">
+                <button onClick={() => openEdit(u)} className="text-xs" style={{ color: NAVY }}>Edit</button>
+                <button onClick={() => setDelUser(u)} className="text-red-500 text-xs hover:underline">Delete</button>
+              </div>
             </div>
             {u.role === "student" && (
               <div className="mt-2">
@@ -435,6 +461,30 @@ function AdminUsers({ users, programmes }) {
             )}
             {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
             <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>{busy ? "Creating…" : "Create account"}</button>
+          </form>
+        </Modal>
+      )}
+
+      {editUser && editForm && (
+        <Modal title={`Edit — ${editUser.name}`} onClose={() => setEditUser(null)}>
+          <form onSubmit={saveEdit}>
+            <Field label="Full name"><input required className={inputCls} value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></Field>
+            {editUser.role === "student" && (
+              <>
+                <Field label="Student number"><input className={inputCls} value={editForm.studentId} onChange={(e) => setEditForm({ ...editForm, studentId: e.target.value })} /></Field>
+                <Field label="Programme">
+                  <select className={inputCls} value={editForm.programmeId} onChange={(e) => setEditForm({ ...editForm, programmeId: e.target.value })}>
+                    <option value="">Select…</option>{programmes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </Field>
+              </>
+            )}
+            {editUser.role !== "student" && (
+              <Field label="Staff ID"><input className={inputCls} value={editForm.staffId} onChange={(e) => setEditForm({ ...editForm, staffId: e.target.value })} /></Field>
+            )}
+            <p className="text-xs text-gray-400 mb-2">Email and password can't be changed here — the person can change their own password from their Profile.</p>
+            {editErr && <p className="text-xs text-red-600 mb-2">{editErr}</p>}
+            <button disabled={editBusy} className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>{editBusy ? "Saving…" : "Save changes"}</button>
           </form>
         </Modal>
       )}
