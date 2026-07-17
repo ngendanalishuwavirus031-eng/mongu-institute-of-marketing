@@ -96,7 +96,7 @@ function LoginScreen() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: NAVY }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center font-serif font-bold text-xl" style={{ background: GOLD, color: NAVY }}>MIM</div>
+          <img src="logo.jpg" alt="Mongu Institute of Marketing" className="w-16 h-16 rounded-full mx-auto mb-3 object-cover shadow" />
           <h1 className="font-serif text-xl font-semibold" style={{ color: NAVY }}>Mongu Institute of Marketing</h1>
           <p className="text-xs text-gray-500 mt-1">Student & Staff Portal</p>
         </div>
@@ -182,23 +182,36 @@ const NAV_ITEMS = {
 function Shell({ user, page, setPage, children }) {
   const [showProfile, setShowProfile] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const items = NAV_ITEMS[user.role] || [];
+
+  function pick(key) { setPage(key); setMobileOpen(false); }
 
   return (
     <div className="min-h-screen flex" style={{ background: "#F6F3EA" }}>
-      <aside className="w-60 shrink-0 text-white flex flex-col" style={{ background: NAVY }}>
-        <div className="p-5 border-b border-white/10">
-          <div className="font-serif font-semibold">MIM Portal</div>
-          <div className="text-[11px] text-white/50 capitalize">{user.role} dashboard</div>
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+
+      <aside className={cx(
+        "w-64 shrink-0 text-white flex flex-col fixed inset-y-0 left-0 z-40 transition-transform duration-200 md:static md:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      )} style={{ background: NAVY }}>
+        <div className="p-5 border-b border-white/10 flex items-center gap-2.5">
+          <img src="logo.jpg" alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+          <div>
+            <div className="font-serif font-semibold leading-tight">MIM Portal</div>
+            <div className="text-[11px] text-white/50 capitalize">{user.role} dashboard</div>
+          </div>
         </div>
-        <nav className="flex-1 py-3">
+        <nav className="flex-1 py-3 overflow-y-auto">
           {items.length === 0 && (
             <p className="px-5 text-xs text-white/50">
               No menu found for role "{user.role || "(none)"}". Ask the Administrator to check this account's role in the Users list.
             </p>
           )}
           {items.map(([key, label]) => (
-            <button key={key} onClick={() => setPage(key)}
+            <button key={key} onClick={() => pick(key)}
               className={cx("w-full text-left px-5 py-2.5 text-sm", page === key ? "bg-white/10 border-l-2" : "text-white/70 hover:bg-white/5")}
               style={page === key ? { borderColor: GOLD } : {}}>
               {label}
@@ -212,16 +225,21 @@ function Shell({ user, page, setPage, children }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6">
-          <div className="font-serif font-medium" style={{ color: NAVY }}>
-            {(items.find((i) => i[0] === page) || [, ""])[1]}
+        <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => setMobileOpen(true)} className="md:hidden shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-lg" style={{ color: NAVY }}>
+              ☰
+            </button>
+            <div className="font-serif font-medium truncate" style={{ color: NAVY }}>
+              {(items.find((i) => i[0] === page) || [, ""])[1]}
+            </div>
           </div>
-          <button onClick={() => setShowProfile(true)} className="flex items-center gap-2">
+          <button onClick={() => setShowProfile(true)} className="flex items-center gap-2 shrink-0">
             <Avatar user={user} size={34} />
             <span className="text-sm text-gray-700 hidden sm:inline">{user.name}</span>
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">{children}</div>
       </main>
 
       {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} />}
@@ -324,7 +342,7 @@ function AdminUsers({ users, programmes }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{users.length} accounts</p>
         <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add user</button>
       </div>
@@ -411,7 +429,7 @@ function AdminCourses({ courses, users, programmes }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{courses.length} courses</p>
         <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add course</button>
       </div>
@@ -679,7 +697,7 @@ function LecturerAssignments({ myCourses, items }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{items.length} posted</p>
         <button onClick={() => setShowAdd(true)} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ New assignment/quiz</button>
       </div>
@@ -745,7 +763,7 @@ function LecturerNotes({ myCourses, notes }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{notes.length} uploaded</p>
         <button onClick={() => setShowAdd(true)} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ Upload note</button>
       </div>
@@ -812,7 +830,7 @@ function LecturerResults({ myCourses, allUsers, results }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{results.length} results entered</p>
         <button onClick={() => setShowAdd(true)} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ Add result</button>
       </div>
@@ -912,7 +930,7 @@ function StudentFees({ fee }) {
 
 // =================================================================== APP ==
 function Dashboard({ user }) {
-  const [page, setPage] = useState("overview");
+  const [page, setPage] = useState(() => (NAV_ITEMS[user.role] && NAV_ITEMS[user.role][0] ? NAV_ITEMS[user.role][0][0] : "overview"));
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
   const [programmes, setProgrammes] = useState([]);
