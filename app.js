@@ -125,6 +125,12 @@ function ProfileModal({ user, onClose }) {
   const [err, setErr] = useState("");
   const fileRef = useRef();
 
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwErr, setPwErr] = useState("");
+  const [pwOk, setPwOk] = useState(false);
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+
   async function pickPhoto(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -137,6 +143,23 @@ function ProfileModal({ user, onClose }) {
       setErr(e2.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function changePassword(e) {
+    e.preventDefault();
+    setPwErr(""); setPwOk(false);
+    if (pwForm.next.length < 6) { setPwErr("New password must be at least 6 characters."); return; }
+    if (pwForm.next !== pwForm.confirm) { setPwErr("New passwords don't match."); return; }
+    setPwBusy(true);
+    try {
+      await FB().changePassword({ currentPassword: pwForm.current, newPassword: pwForm.next });
+      setPwOk(true);
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (e2) {
+      setPwErr(e2.message.replace("Firebase: ", ""));
+    } finally {
+      setPwBusy(false);
     }
   }
 
@@ -156,6 +179,22 @@ function ProfileModal({ user, onClose }) {
         <p><span className="text-gray-500">Role:</span> {user.role}</p>
         {user.studentId && <p><span className="text-gray-500">Student No:</span> {user.studentId}</p>}
         {user.examNumber && <p><span className="text-gray-500">Exam No:</span> {user.examNumber}</p>}
+      </div>
+
+      <div className="border-t pt-4 mt-4">
+        <button onClick={() => setPwOpen((v) => !v)} className="text-sm font-medium" style={{ color: NAVY }}>
+          {pwOpen ? "▾" : "▸"} Change password
+        </button>
+        {pwOpen && (
+          <form onSubmit={changePassword} className="mt-3">
+            <Field label="Current password"><input type="password" required className={inputCls} value={pwForm.current} onChange={(e) => setPwForm({ ...pwForm, current: e.target.value })} /></Field>
+            <Field label="New password"><input type="password" required minLength={6} className={inputCls} value={pwForm.next} onChange={(e) => setPwForm({ ...pwForm, next: e.target.value })} /></Field>
+            <Field label="Confirm new password"><input type="password" required minLength={6} className={inputCls} value={pwForm.confirm} onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })} /></Field>
+            {pwErr && <p className="text-xs text-red-600 mb-2">{pwErr}</p>}
+            {pwOk && <p className="text-xs text-green-600 mb-2">Password updated.</p>}
+            <button disabled={pwBusy} className="w-full py-2 rounded-lg text-white text-sm font-medium" style={{ background: NAVY }}>{pwBusy ? "Saving…" : "Save new password"}</button>
+          </form>
+        )}
       </div>
     </Modal>
   );
@@ -656,6 +695,9 @@ function LecturerCourses({ myCourses, allUsers }) {
           <Field label="Find a student by name, email, or student number">
             <input className={inputCls} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Type to search…" />
           </Field>
+          {search && candidates.length === 0 && (
+            <p className="text-xs text-gray-400 mb-4">No matching student found. They may already be enrolled, or check the spelling — ask the Admin to confirm the student's account exists.</p>
+          )}
           {candidates.length > 0 && (
             <div className="border rounded-lg divide-y mb-4 max-h-40 overflow-y-auto">
               {candidates.map((u) => (
