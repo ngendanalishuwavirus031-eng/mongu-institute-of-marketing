@@ -238,20 +238,8 @@ function Shell({ user, page, setPage, children }) {
 }
 
 // =============================================================== ADMIN ====
-function AdminOverview({ users, courses, fees, results, assignments, announcements }) {
-  const counts = useMemo(() => {
-    const c = { admin: 0, lecturer: 0, student: 0, bursar: 0 };
-    users.forEach((u) => { if (c[u.role] !== undefined) c[u.role]++; });
-    return c;
-  }, [users]);
-  const totalBilled = fees.reduce((s, f) => s + (f.billed || 0), 0);
-  const totalBalance = fees.reduce((s, f) => s + (f.balance || 0), 0);
-  const totalCollected = totalBilled - totalBalance;
-  const studentsCleared = fees.filter((f) => (f.balance || 0) <= 0).length;
-  const quizCount = assignments.filter((a) => a.kind === "quiz").length;
-  const assignmentCount = assignments.filter((a) => a.kind === "assignment").length;
-
-  const Card = ({ label, value, icon, accent }) => (
+function StatCard({ label, value, icon, accent }) {
+  return (
     <div className="bg-white rounded-xl p-5 shadow-sm border flex items-start gap-3">
       <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg shrink-0" style={{ background: (accent || GOLD) + "22" }}>
         {icon}
@@ -262,31 +250,51 @@ function AdminOverview({ users, courses, fees, results, assignments, announcemen
       </div>
     </div>
   );
+}
+
+function FeesSummaryCards({ fees }) {
+  const totalBilled = fees.reduce((s, f) => s + (f.billed || 0), 0);
+  const totalBalance = fees.reduce((s, f) => s + (f.balance || 0), 0);
+  const totalCollected = totalBilled - totalBalance;
+  const studentsCleared = fees.filter((f) => (f.balance || 0) <= 0).length;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <StatCard label="Total billed (K)" value={totalBilled.toLocaleString()} icon="🧾" />
+      <StatCard label="Fees collected (K)" value={totalCollected.toLocaleString()} icon="✅" accent="#16a34a" />
+      <StatCard label="Outstanding (K)" value={totalBalance.toLocaleString()} icon="⚠️" accent="#dc2626" />
+      <StatCard label="Students cleared" value={`${studentsCleared}/${fees.length}`} icon="📋" />
+    </div>
+  );
+}
+
+function AdminOverview({ users, courses, fees, results, assignments, announcements }) {
+  const counts = useMemo(() => {
+    const c = { admin: 0, lecturer: 0, student: 0, bursar: 0 };
+    users.forEach((u) => { if (c[u.role] !== undefined) c[u.role]++; });
+    return c;
+  }, [users]);
+  const quizCount = assignments.filter((a) => a.kind === "quiz").length;
+  const assignmentCount = assignments.filter((a) => a.kind === "assignment").length;
 
   return (
     <div>
       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">People</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card label="Students" value={counts.student} icon="🎓" />
-        <Card label="Lecturers" value={counts.lecturer} icon="🧑‍🏫" />
-        <Card label="Bursars" value={counts.bursar} icon="💼" />
-        <Card label="Courses" value={courses.length} icon="📚" />
+        <StatCard label="Students" value={counts.student} icon="🎓" />
+        <StatCard label="Lecturers" value={counts.lecturer} icon="🧑‍🏫" />
+        <StatCard label="Bursars" value={counts.bursar} icon="💼" />
+        <StatCard label="Courses" value={courses.length} icon="📚" />
       </div>
 
       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Fees</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card label="Total billed (K)" value={totalBilled.toLocaleString()} icon="🧾" />
-        <Card label="Fees collected (K)" value={totalCollected.toLocaleString()} icon="✅" accent="#16a34a" />
-        <Card label="Outstanding (K)" value={totalBalance.toLocaleString()} icon="⚠️" accent="#dc2626" />
-        <Card label="Students cleared" value={`${studentsCleared}/${fees.length}`} icon="📋" />
-      </div>
+      <FeesSummaryCards fees={fees} />
 
       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Academics</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card label="Assignments posted" value={assignmentCount} icon="📝" />
-        <Card label="Quizzes posted" value={quizCount} icon="❓" />
-        <Card label="Results entered" value={results.length} icon="📊" />
-        <Card label="Announcements" value={announcements.length} icon="📣" />
+        <StatCard label="Assignments posted" value={assignmentCount} icon="📝" />
+        <StatCard label="Quizzes posted" value={quizCount} icon="❓" />
+        <StatCard label="Results entered" value={results.length} icon="📊" />
+        <StatCard label="Announcements" value={announcements.length} icon="📣" />
       </div>
     </div>
   );
@@ -499,6 +507,15 @@ function FeesTable({ fees, editable }) {
           <button onClick={recordPayment} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>Save payment</button>
         </Modal>
       )}
+    </div>
+  );
+}
+
+function FeesPage({ fees }) {
+  return (
+    <div>
+      <FeesSummaryCards fees={fees} />
+      <FeesTable fees={fees} editable />
     </div>
   );
 }
@@ -923,7 +940,7 @@ function Dashboard({ user }) {
     if (page === "overview") content = <AdminOverview users={users} courses={courses} fees={fees} results={results} assignments={assignments} announcements={announcements} />;
     if (page === "users") content = <AdminUsers users={users} programmes={programmes} />;
     if (page === "courses") content = <AdminCourses courses={courses} users={users} programmes={programmes} />;
-    if (page === "fees") content = <FeesTable fees={fees} editable />;
+    if (page === "fees") content = <FeesPage fees={fees} />;
     if (page === "results") content = <ResultsTable results={results} showStudent />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements} courses={courses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "lecturer") {
@@ -941,7 +958,7 @@ function Dashboard({ user }) {
     if (page === "fees") content = <StudentFees fee={myFee} />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost={false} currentUser={user} />;
   } else if (user.role === "bursar") {
-    if (page === "fees") content = <FeesTable fees={fees} editable />;
+    if (page === "fees") content = <FeesPage fees={fees} />;
   }
 
   return <Shell user={user} page={page} setPage={setPage}>{content}</Shell>;
