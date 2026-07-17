@@ -385,28 +385,26 @@ function AdminUsers({ users, programmes }) {
         <p className="text-sm text-gray-500">{users.length} accounts</p>
         <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add user</button>
       </div>
-      <div className="bg-white rounded-xl border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-            <tr><th className="text-left p-3">Name</th><th className="text-left p-3">Role</th><th className="text-left p-3">Student No</th><th className="text-left p-3">Exam No</th><th className="p-3"></th></tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.uid} className="border-t">
-                <td className="p-3">{u.name}<div className="text-xs text-gray-400">{u.email}</div></td>
-                <td className="p-3 capitalize">{u.role}</td>
-                <td className="p-3">{u.studentId || "—"}</td>
-                <td className="p-3">
-                  {u.role === "student" ? (
-                    <input defaultValue={u.examNumber || ""} onBlur={(e) => saveExamNumber(u, e.target.value)}
-                      placeholder="Set exam no." className="border border-gray-200 rounded px-2 py-1 text-xs w-28" />
-                  ) : "—"}
-                </td>
-                <td className="p-3 text-right"><button onClick={() => setDelUser(u)} className="text-red-500 text-xs hover:underline">Delete</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-2">
+        {users.map((u) => (
+          <div key={u.uid} className="bg-white rounded-xl border p-4">
+            <div className="flex justify-between items-start gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-sm truncate">{u.name}</div>
+                <div className="text-xs text-gray-400 truncate">{u.email}</div>
+                <div className="text-xs text-gray-500 capitalize mt-0.5">{u.role}{u.studentId ? ` · ${u.studentId}` : ""}</div>
+              </div>
+              <button onClick={() => setDelUser(u)} className="shrink-0 text-red-500 text-xs hover:underline">Delete</button>
+            </div>
+            {u.role === "student" && (
+              <div className="mt-2">
+                <input defaultValue={u.examNumber || ""} onBlur={(e) => saveExamNumber(u, e.target.value)}
+                  placeholder="Set exam number" className="border border-gray-200 rounded px-2 py-1.5 text-xs w-full max-w-[160px]" />
+              </div>
+            )}
+          </div>
+        ))}
+        {users.length === 0 && <p className="text-sm text-gray-400">No accounts yet.</p>}
       </div>
 
       {showAdd && (
@@ -525,43 +523,58 @@ function AdminCourses({ courses, users, programmes }) {
 function FeesTable({ fees, editable }) {
   const [payUser, setPayUser] = useState(null);
   const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   async function recordPayment() {
+    setErr("");
     const amt = Number(amount);
-    if (!amt || amt <= 0) return;
-    await FB().updateDoc(`fees/${payUser.id}`, {
-      balance: FB().increment(-amt),
-      payments: FB().arrayUnion({ amount: amt, date: new Date().toISOString() }),
-    });
-    setPayUser(null); setAmount("");
+    if (!amt || amt <= 0) { setErr("Enter an amount greater than 0."); return; }
+    setBusy(true);
+    try {
+      await FB().updateDoc(`fees/${payUser.id}`, {
+        balance: FB().increment(-amt),
+        payments: FB().arrayUnion({ amount: amt, date: new Date().toISOString() }),
+      });
+      setPayUser(null); setAmount("");
+    } catch (e2) {
+      setErr(e2.message || "Could not save this payment. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div className="bg-white rounded-xl border overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-          <tr><th className="text-left p-3">Student</th><th className="text-left p-3">Billed</th><th className="text-left p-3">Balance</th><th className="text-left p-3">Status</th>{editable && <th className="p-3"></th>}</tr>
-        </thead>
-        <tbody>
-          {fees.map((f) => (
-            <tr key={f.id} className="border-t">
-              <td className="p-3">{f.studentName}<div className="text-xs text-gray-400">{f.studentId}</div></td>
-              <td className="p-3">K{(f.billed || 0).toLocaleString()}</td>
-              <td className="p-3">K{(f.balance || 0).toLocaleString()}</td>
-              <td className="p-3">
-                {f.balance > 0
-                  ? <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">Balance due</span>
-                  : <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600">Cleared</span>}
-              </td>
-              {editable && <td className="p-3 text-right"><button onClick={() => setPayUser(f)} className="text-xs hover:underline" style={{ color: NAVY }}>Record payment</button></td>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      {fees.map((f) => (
+        <div key={f.id} className="bg-white rounded-xl border p-4">
+          <div className="flex justify-between items-start gap-3">
+            <div className="min-w-0">
+              <div className="font-medium text-sm truncate">{f.studentName}</div>
+              <div className="text-xs text-gray-400">{f.studentId}</div>
+            </div>
+            {f.balance > 0
+              ? <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">Balance due</span>
+              : <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600">Cleared</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
+            <div><span className="text-xs text-gray-400 block">Billed</span>K{(f.billed || 0).toLocaleString()}</div>
+            <div><span className="text-xs text-gray-400 block">Balance</span>K{(f.balance || 0).toLocaleString()}</div>
+          </div>
+          {editable && (
+            <button onClick={() => { setPayUser(f); setErr(""); setAmount(""); }} className="mt-3 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
+              Record payment
+            </button>
+          )}
+        </div>
+      ))}
+      {fees.length === 0 && <p className="text-sm text-gray-400">No fee records yet.</p>}
+
       {payUser && (
         <Modal title={`Record payment — ${payUser.studentName}`} onClose={() => setPayUser(null)}>
           <Field label="Amount (K)"><input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-          <button onClick={recordPayment} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>Save payment</button>
+          {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+          <button disabled={busy} onClick={recordPayment} className="w-full py-2.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: NAVY }}>{busy ? "Saving…" : "Save payment"}</button>
         </Modal>
       )}
     </div>
@@ -579,34 +592,29 @@ function FeesPage({ fees }) {
 
 function ResultsTable({ results, showStudent }) {
   return (
-    <div className="bg-white rounded-xl border overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-          <tr>
-            {showStudent && <th className="text-left p-3">Student</th>}
-            <th className="text-left p-3">Course</th><th className="text-left p-3">Term</th>
-            <th className="text-left p-3">Assignment</th><th className="text-left p-3">Test</th>
-            <th className="text-left p-3">CA (40)</th><th className="text-left p-3">Exam (60)</th>
-            <th className="text-left p-3">Total</th><th className="text-left p-3">Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.map((r) => (
-            <tr key={r.id} className="border-t">
-              {showStudent && <td className="p-3">{r.studentName}</td>}
-              <td className="p-3">{r.courseName}</td>
-              <td className="p-3">{r.term}</td>
-              <td className="p-3">{r.assignmentScore}</td>
-              <td className="p-3">{r.testScore}</td>
-              <td className="p-3">{r.caTotal}</td>
-              <td className="p-3">{r.examScore}</td>
-              <td className="p-3 font-medium">{r.total}</td>
-              <td className="p-3">{r.grade}</td>
-            </tr>
-          ))}
-          {results.length === 0 && <tr><td className="p-4 text-gray-400 text-sm" colSpan={9}>No results yet.</td></tr>}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      {results.map((r) => (
+        <div key={r.id} className="bg-white rounded-xl border p-4">
+          <div className="flex justify-between items-start gap-3">
+            <div className="min-w-0">
+              {showStudent && <div className="font-medium text-sm truncate">{r.studentName}</div>}
+              <div className="text-sm text-gray-600 truncate">{r.courseName}</div>
+              <div className="text-xs text-gray-400">{r.term}</div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-xl font-serif font-semibold" style={{ color: NAVY }}>{r.total}</div>
+              <div className="text-xs text-gray-400">Grade {r.grade}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2 mt-3 text-xs text-center border-t pt-3">
+            <div><span className="text-gray-400 block">Assignment</span><span className="font-medium">{r.assignmentScore}</span></div>
+            <div><span className="text-gray-400 block">Test</span><span className="font-medium">{r.testScore}</span></div>
+            <div><span className="text-gray-400 block">CA /40</span><span className="font-medium">{r.caTotal}</span></div>
+            <div><span className="text-gray-400 block">Exam /60</span><span className="font-medium">{r.examScore}</span></div>
+          </div>
+        </div>
+      ))}
+      {results.length === 0 && <p className="text-sm text-gray-400">No results yet.</p>}
     </div>
   );
 }
