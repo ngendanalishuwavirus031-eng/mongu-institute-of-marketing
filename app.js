@@ -261,7 +261,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.2</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.3</p>
         </div>
       </aside>
 
@@ -1227,7 +1227,7 @@ function Dashboard({ user }) {
       FB().subCollection("results", setResults),
       FB().subCollection("announcements", setAnnouncements, { orderBy: ["createdAt", "desc"] }),
     ];
-    if (user.role === "admin" || user.role === "bursar") unsubs.push(FB().subCollection("fees", setFees));
+    if (user.role === "admin" || user.role === "bursar" || user.role === "student") unsubs.push(FB().subCollection("fees", setFees));
     return () => unsubs.forEach((u) => u && u());
   }, [user.role]);
 
