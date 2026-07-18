@@ -170,7 +170,7 @@ const FirebaseAPI = {
     if (clauses.length) q = query(collRef(path), ...clauses);
     return onSnapshot(
       q,
-      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, uid: d.id, ...d.data() }))),
       (err) => window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path, err } }))
     );
   },
@@ -182,7 +182,7 @@ const FirebaseAPI = {
     if (opts && opts.orderBy) clauses.push(orderBy(...opts.orderBy));
     if (clauses.length) q = query(collRef(path), ...clauses);
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => ({ id: d.id, uid: d.id, ...d.data() }));
   },
 
   async setDoc(path, data, merge = true) {
