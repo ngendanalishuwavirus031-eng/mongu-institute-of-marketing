@@ -261,7 +261,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-17.5</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-17.6</p>
         </div>
       </aside>
 
@@ -522,8 +522,9 @@ function AdminCourses({ courses, users, programmes }) {
   async function saveLecturer(courseId, lecturerId) {
     try {
       await FB().updateDoc(`courses/${courseId}`, { lecturerId: lecturerId || null });
+      alert("Saved successfully.");
     } catch (e2) {
-      alert("Could not save: " + (e2.message || "unknown error"));
+      alert("FAILED to save: " + (e2 && e2.message ? e2.message : JSON.stringify(e2)));
     }
     setAssignCourse(null);
   }
