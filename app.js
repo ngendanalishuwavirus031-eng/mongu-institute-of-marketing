@@ -261,7 +261,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-17.6</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.1</p>
         </div>
       </aside>
 
@@ -522,9 +522,9 @@ function AdminCourses({ courses, users, programmes }) {
   async function saveLecturer(courseId, lecturerId) {
     try {
       await FB().updateDoc(`courses/${courseId}`, { lecturerId: lecturerId || null });
-      alert("Saved successfully.");
+      window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path: "SAVE RESULT", err: { code: "success", message: "Lecturer assignment saved OK for course " + courseId } } }));
     } catch (e2) {
-      alert("FAILED to save: " + (e2 && e2.message ? e2.message : JSON.stringify(e2)));
+      window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path: "SAVE RESULT", err: { code: "FAILED", message: (e2 && e2.message) ? e2.message : JSON.stringify(e2) } } }));
     }
     setAssignCourse(null);
   }
