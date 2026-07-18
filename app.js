@@ -261,7 +261,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-17.4</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-17.5</p>
         </div>
       </aside>
 
@@ -503,34 +503,52 @@ function AdminUsers({ users, programmes }) {
 function AdminCourses({ courses, users, programmes }) {
   const [showAdd, setShowAdd] = useState(false);
   const [assignCourse, setAssignCourse] = useState(null);
+  const [delCourse, setDelCourse] = useState(null);
   const [form, setForm] = useState({ name: "", code: "", programmeId: "", lecturerId: "" });
+  const [err, setErr] = useState("");
   const lecturers = users.filter((u) => u.role === "lecturer");
 
   async function addCourse(e) {
     e.preventDefault();
-    await FB().addDoc("courses", { ...form, studentIds: [], createdAt: FB().serverTimestamp() });
-    setShowAdd(false); setForm({ name: "", code: "", programmeId: "", lecturerId: "" });
+    setErr("");
+    try {
+      await FB().addDoc("courses", { ...form, studentIds: [], createdAt: FB().serverTimestamp() });
+      setShowAdd(false); setForm({ name: "", code: "", programmeId: "", lecturerId: "" });
+    } catch (e2) {
+      setErr(e2.message || "Could not create the course. Please try again.");
+    }
   }
 
   async function saveLecturer(courseId, lecturerId) {
-    await FB().updateDoc(`courses/${courseId}`, { lecturerId: lecturerId || null });
+    try {
+      await FB().updateDoc(`courses/${courseId}`, { lecturerId: lecturerId || null });
+    } catch (e2) {
+      alert("Could not save: " + (e2.message || "unknown error"));
+    }
     setAssignCourse(null);
   }
 
   return (
     <div>
       <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
-        <p className="text-sm text-gray-500">{courses.length} courses</p>
+        <p className="text-sm text-gray-500">{courses.length} courses{lecturers.length === 0 ? " · 0 lecturer accounts exist" : ""}</p>
         <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add course</button>
       </div>
+      {lecturers.length === 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+          No lecturer accounts exist yet, so there's nothing to pick in "Assign lecturer." Go to Manage Users → + Add user → choose Role "Lecturer" first.
+        </p>
+      )}
       <div className="grid md:grid-cols-2 gap-4">
         {courses.map((c) => {
           const lec = users.find((u) => u.uid === c.lecturerId);
           return (
             <div key={c.id} className="bg-white rounded-xl border p-4">
-              <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
+              <div className="flex justify-between items-start gap-2">
+                <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
+                <button onClick={() => setDelCourse(c)} className="shrink-0 text-xs text-red-500">Delete</button>
+              </div>
               <p className="text-xs text-gray-500 mt-1">Lecturer: {lec ? lec.name : "Unassigned"}</p>
-              <p className="text-[10px] text-gray-300 font-mono">Lecturer ID: {c.lecturerId || "none"}</p>
               <p className="text-xs text-gray-500 mb-3">Students enrolled: {(c.studentIds || []).length}</p>
               <button onClick={() => setAssignCourse(c)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
                 {lec ? "Change lecturer" : "Assign lecturer"}
@@ -554,6 +572,7 @@ function AdminCourses({ courses, users, programmes }) {
                 <option value="">Unassigned for now</option>{lecturers.map((l) => <option key={l.uid} value={l.uid}>{l.name}</option>)}
               </select>
             </Field>
+            {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
             <button className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>Create course</button>
           </form>
         </Modal>
@@ -569,7 +588,11 @@ function AdminCourses({ courses, users, programmes }) {
           {lecturers.length === 0 && <p className="text-xs text-gray-400 mt-1">No lecturer accounts exist yet — add one under Manage Users first.</p>}
         </Modal>
       )}
-
+      {delCourse && (
+        <ConfirmModal title={`Delete "${delCourse.name}"?`} body="This removes the course and all its enrollment data."
+          onNo={() => setDelCourse(null)}
+          onYes={async () => { await FB().deleteDoc(`courses/${delCourse.id}`); setDelCourse(null); }} />
+      )}
     </div>
   );
 }
