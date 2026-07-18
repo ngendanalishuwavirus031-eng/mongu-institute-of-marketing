@@ -177,6 +177,7 @@ function ProfileModal({ user, onClose }) {
         <p><span className="text-gray-500">Name:</span> {user.name}</p>
         <p><span className="text-gray-500">Email:</span> {user.email}</p>
         <p><span className="text-gray-500">Role:</span> {user.role}</p>
+        <p className="font-mono text-[10px] text-gray-400 break-all"><span className="text-gray-500 font-sans">Account ID:</span> {user.uid}</p>
         {user.studentId && <p><span className="text-gray-500">Student No:</span> {user.studentId}</p>}
         {user.examNumber && <p><span className="text-gray-500">Exam No:</span> {user.examNumber}</p>}
       </div>
@@ -417,6 +418,7 @@ function AdminUsers({ users, programmes }) {
                 <div className="font-medium text-sm truncate">{u.name}</div>
                 <div className="text-xs text-gray-400 truncate">{u.email}</div>
                 <div className="text-xs text-gray-500 capitalize mt-0.5">{u.role}{u.studentId ? ` · ${u.studentId}` : ""}</div>
+                <div className="text-[10px] text-gray-300 mt-0.5 font-mono">ID: {u.uid}</div>
               </div>
               <div className="shrink-0 flex gap-3">
                 <button onClick={() => openEdit(u)} className="text-xs" style={{ color: NAVY }}>Edit</button>
@@ -528,6 +530,7 @@ function AdminCourses({ courses, users, programmes }) {
             <div key={c.id} className="bg-white rounded-xl border p-4">
               <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
               <p className="text-xs text-gray-500 mt-1">Lecturer: {lec ? lec.name : "Unassigned"}</p>
+              <p className="text-[10px] text-gray-300 font-mono">Lecturer ID: {c.lecturerId || "none"}</p>
               <p className="text-xs text-gray-500 mb-3">Students enrolled: {(c.studentIds || []).length}</p>
               <button onClick={() => setAssignCourse(c)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
                 {lec ? "Change lecturer" : "Assign lecturer"}
