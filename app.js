@@ -267,7 +267,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.4</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.5</p>
         </div>
       </aside>
 
@@ -884,7 +884,7 @@ function FeesPage({ fees }) {
   );
 }
 
-function ResultsTable({ results, showStudent }) {
+function ResultsTable({ results, showStudent, onEdit, onDelete }) {
   return (
     <div className="space-y-2">
       {results.map((r) => (
@@ -906,6 +906,12 @@ function ResultsTable({ results, showStudent }) {
             <div><span className="text-gray-400 block">CA /40</span><span className="font-medium">{r.caTotal}</span></div>
             <div><span className="text-gray-400 block">Exam /60</span><span className="font-medium">{r.examScore}</span></div>
           </div>
+          {(onEdit || onDelete) && (
+            <div className="flex gap-3 mt-2 pt-2 border-t">
+              {onEdit && <button onClick={() => onEdit(r)} className="text-xs" style={{ color: NAVY }}>Edit</button>}
+              {onDelete && <button onClick={() => onDelete(r)} className="text-xs text-red-500">Delete</button>}
+            </div>
+          )}
         </div>
       ))}
       {results.length === 0 && <p className="text-sm text-gray-400">No results yet.</p>}
@@ -1125,39 +1131,89 @@ function LecturerCourses({ myCourses, allUsers }) {
   );
 }
 
-function LecturerAssignments({ myCourses, items }) {
+function LecturerAssignments({ myCourses, items, submissions }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [delItem, setDelItem] = useState(null);
+  const [viewSubsFor, setViewSubsFor] = useState(null);
   const [form, setForm] = useState({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "" });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  async function add(e) {
+  function openAdd() {
+    setEditItem(null);
+    setForm({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "" });
+    setFile(null); setErr("");
+    setShowAdd(true);
+  }
+  function openEdit(a) {
+    setEditItem(a);
+    setForm({ courseId: a.courseId, kind: a.kind, title: a.title, description: a.description || "", dueDate: a.dueDate || "" });
+    setFile(null); setErr("");
+    setShowAdd(true);
+  }
+
+  async function save(e) {
     e.preventDefault();
-    await FB().addDoc("assignments", { ...form, createdAt: FB().serverTimestamp() });
-    setShowAdd(false); setForm({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "" });
+    setErr(""); setBusy(true);
+    try {
+      let attachment = editItem ? { attachmentURL: editItem.attachmentURL || null, attachmentName: editItem.attachmentName || null } : {};
+      if (file) {
+        const path = `assignment-files/${form.courseId}/${Date.now()}-${file.name}`;
+        const url = await FB().uploadFile(path, file);
+        attachment = { attachmentURL: url, attachmentName: file.name };
+      }
+      if (editItem) {
+        await FB().updateDoc(`assignments/${editItem.id}`, { ...form, ...attachment });
+      } else {
+        await FB().addDoc("assignments", { ...form, ...attachment, createdAt: FB().serverTimestamp() });
+      }
+      setShowAdd(false);
+    } catch (e2) {
+      setErr(e2.message || "Could not save. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div>
       <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{items.length} posted</p>
-        <button onClick={() => setShowAdd(true)} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ New assignment/quiz</button>
+        <button onClick={openAdd} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ New assignment/quiz</button>
       </div>
       <div className="space-y-3">
         {items.map((a) => (
           <div key={a.id} className="bg-white rounded-xl border p-4">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-start gap-2">
               <span className="font-serif font-semibold" style={{ color: NAVY }}>{a.title}</span>
-              <span className="text-[10px] uppercase px-2 py-0.5 rounded-full" style={{ background: a.kind === "quiz" ? "#FEF3C7" : "#DBEAFE", color: "#374151" }}>{a.kind}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full" style={{ background: a.kind === "quiz" ? "#FEF3C7" : "#DBEAFE", color: "#374151" }}>{a.kind}</span>
+                <button onClick={() => openEdit(a)} className="text-xs" style={{ color: NAVY }}>Edit</button>
+                <button onClick={() => setDelItem(a)} className="text-xs text-red-500">Delete</button>
+              </div>
             </div>
             <p className="text-sm text-gray-600 mt-1">{a.description}</p>
             {a.dueDate && <p className="text-xs text-gray-400 mt-1">Due {a.dueDate}</p>}
+            {a.attachmentURL && (
+              <a href={a.attachmentURL} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
+                📄 {a.attachmentName || "Download attachment"}
+              </a>
+            )}
+            <div className="mt-2 pt-2 border-t">
+              <button onClick={() => setViewSubsFor(a)} className="text-xs" style={{ color: NAVY }}>
+                View submissions ({submissions.filter((s) => s.assignmentId === a.id).length})
+              </button>
+            </div>
           </div>
         ))}
         {items.length === 0 && <p className="text-sm text-gray-400">Nothing posted yet.</p>}
       </div>
 
       {showAdd && (
-        <Modal title="New assignment / quiz" onClose={() => setShowAdd(false)}>
-          <form onSubmit={add}>
+        <Modal title={editItem ? "Edit assignment / quiz" : "New assignment / quiz"} onClose={() => setShowAdd(false)}>
+          <form onSubmit={save}>
             <Field label="Course">
               <select required className={inputCls} value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
                 <option value="">Select…</option>{myCourses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1171,8 +1227,36 @@ function LecturerAssignments({ myCourses, items }) {
             <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Instructions"><textarea rows={3} className={inputCls} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Due date"><input type="date" className={inputCls} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></Field>
-            <button className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>Post</button>
+            <Field label="Attach PDF (question paper, optional)">
+              <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files[0])} />
+              {editItem && editItem.attachmentName && !file && <p className="text-xs text-gray-400 mt-1">Current file: {editItem.attachmentName} (choosing a new one replaces it)</p>}
+              {file && <p className="text-xs text-green-600 mt-1">Selected: {file.name}</p>}
+            </Field>
+            {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium">{busy ? "Saving…" : editItem ? "Save changes" : "Post"}</button>
           </form>
+        </Modal>
+      )}
+      {delItem && (
+        <ConfirmModal title={`Delete "${delItem.title}"?`} onNo={() => setDelItem(null)}
+          onYes={async () => { await FB().deleteDoc(`assignments/${delItem.id}`); setDelItem(null); }} />
+      )}
+      {viewSubsFor && (
+        <Modal title={`Submissions — ${viewSubsFor.title}`} onClose={() => setViewSubsFor(null)}>
+          <div className="space-y-2">
+            {submissions.filter((s) => s.assignmentId === viewSubsFor.id).map((s) => (
+              <div key={s.id} className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{s.studentName}</div>
+                  <div className="text-xs text-gray-400 truncate">{s.fileName}</div>
+                </div>
+                <a href={s.fileURL} target="_blank" rel="noreferrer" className="text-xs shrink-0" style={{ color: NAVY }}>Download</a>
+              </div>
+            ))}
+            {submissions.filter((s) => s.assignmentId === viewSubsFor.id).length === 0 && (
+              <p className="text-sm text-gray-400">No submissions yet.</p>
+            )}
+          </div>
         </Modal>
       )}
     </div>
@@ -1242,12 +1326,25 @@ function LecturerNotes({ myCourses, notes }) {
 
 function LecturerResults({ myCourses, allUsers, results }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [editResult, setEditResult] = useState(null);
+  const [delResult, setDelResult] = useState(null);
   const [form, setForm] = useState({ courseId: "", studentUid: "", term: TERMS[0], assignmentScore: "", testScore: "", examScore: "" });
   const students = useMemo(() => {
     const c = myCourses.find((x) => x.id === form.courseId);
     if (!c) return [];
     return (c.studentIds || []).map((uid) => allUsers.find((u) => u.uid === uid)).filter(Boolean);
   }, [form.courseId, myCourses, allUsers]);
+
+  function openAdd() {
+    setEditResult(null);
+    setForm({ courseId: "", studentUid: "", term: TERMS[0], assignmentScore: "", testScore: "", examScore: "" });
+    setShowAdd(true);
+  }
+  function openEdit(r) {
+    setEditResult(r);
+    setForm({ courseId: r.courseId, studentUid: r.studentId, term: r.term, assignmentScore: String(r.assignmentScore), testScore: String(r.testScore), examScore: String(r.examScore) });
+    setShowAdd(true);
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -1258,26 +1355,26 @@ function LecturerResults({ myCourses, allUsers, results }) {
     const total = Math.min(caTotal + ex, 100);
     const course = myCourses.find((c) => c.id === form.courseId);
     const student = allUsers.find((u) => u.uid === form.studentUid);
-    await FB().addDoc("results", {
+    const data = {
       courseId: form.courseId, courseName: course.name,
       studentId: form.studentUid, studentName: student.name, term: form.term,
       assignmentScore: a, testScore: t, examScore: ex, caTotal, total, grade: grade(total),
-      createdAt: FB().serverTimestamp(),
-    });
+    };
+    if (editResult) await FB().updateDoc(`results/${editResult.id}`, data);
+    else await FB().addDoc("results", { ...data, createdAt: FB().serverTimestamp() });
     setShowAdd(false);
-    setForm({ courseId: "", studentUid: "", term: TERMS[0], assignmentScore: "", testScore: "", examScore: "" });
   }
 
   return (
     <div>
       <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
         <p className="text-sm text-gray-500">{results.length} results entered</p>
-        <button onClick={() => setShowAdd(true)} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ Add result</button>
+        <button onClick={openAdd} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ Add result</button>
       </div>
-      <ResultsTable results={results} showStudent />
+      <ResultsTable results={results} showStudent onEdit={openEdit} onDelete={(r) => setDelResult(r)} />
 
       {showAdd && (
-        <Modal title="Add term result" onClose={() => setShowAdd(false)}>
+        <Modal title={editResult ? "Edit term result" : "Add term result"} onClose={() => setShowAdd(false)}>
           <form onSubmit={save}>
             <Field label="Course">
               <select required className={inputCls} value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value, studentUid: "" })}>
@@ -1299,9 +1396,13 @@ function LecturerResults({ myCourses, allUsers, results }) {
               <Field label="Test (/20)"><input type="number" className={inputCls} value={form.testScore} onChange={(e) => setForm({ ...form, testScore: e.target.value })} /></Field>
               <Field label="Exam (/60)"><input type="number" className={inputCls} value={form.examScore} onChange={(e) => setForm({ ...form, examScore: e.target.value })} /></Field>
             </div>
-            <button className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>Save result</button>
+            <button className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>{editResult ? "Save changes" : "Save result"}</button>
           </form>
         </Modal>
+      )}
+      {delResult && (
+        <ConfirmModal title={`Delete this result for ${delResult.studentName}?`} onNo={() => setDelResult(null)}
+          onYes={async () => { await FB().deleteDoc(`results/${delResult.id}`); setDelResult(null); }} />
       )}
     </div>
   );
@@ -1321,19 +1422,71 @@ function StudentCourses({ myCourses }) {
   );
 }
 
-function StudentWork({ items }) {
+function StudentWork({ items, submissions, currentUser }) {
+  const [uploadingFor, setUploadingFor] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState("");
+
+  const mySubmission = (assignmentId) => submissions.find((s) => s.assignmentId === assignmentId && s.studentId === currentUser.uid);
+
+  async function submitAnswer(a, file) {
+    if (!file) return;
+    setBusyId(a.id); setErr("");
+    try {
+      const path = `submissions/${a.id}/${currentUser.uid}-${Date.now()}-${file.name}`;
+      const url = await FB().uploadFile(path, file);
+      const existing = mySubmission(a.id);
+      const data = {
+        assignmentId: a.id, courseId: a.courseId, studentId: currentUser.uid, studentName: currentUser.name,
+        fileURL: url, fileName: file.name, submittedAt: FB().serverTimestamp(),
+      };
+      if (existing) await FB().updateDoc(`submissions/${existing.id}`, data);
+      else await FB().addDoc("submissions", data);
+      setUploadingFor(null);
+    } catch (e2) {
+      setErr(e2.message || "Could not upload your answer. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="space-y-3">
-      {items.map((a) => (
-        <div key={a.id} className="bg-white rounded-xl border p-4">
-          <div className="flex justify-between">
-            <span className="font-serif font-semibold" style={{ color: NAVY }}>{a.title}</span>
-            <span className="text-[10px] uppercase px-2 py-0.5 rounded-full" style={{ background: a.kind === "quiz" ? "#FEF3C7" : "#DBEAFE", color: "#374151" }}>{a.kind}</span>
+      {items.map((a) => {
+        const sub = mySubmission(a.id);
+        return (
+          <div key={a.id} className="bg-white rounded-xl border p-4">
+            <div className="flex justify-between">
+              <span className="font-serif font-semibold" style={{ color: NAVY }}>{a.title}</span>
+              <span className="text-[10px] uppercase px-2 py-0.5 rounded-full" style={{ background: a.kind === "quiz" ? "#FEF3C7" : "#DBEAFE", color: "#374151" }}>{a.kind}</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">{a.description}</p>
+            {a.dueDate && <p className="text-xs text-gray-400 mt-1">Due {a.dueDate}</p>}
+            {a.attachmentURL && (
+              <a href={a.attachmentURL} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
+                📄 {a.attachmentName || "Download question paper"}
+              </a>
+            )}
+            <div className="mt-3 pt-3 border-t">
+              {sub ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600">Submitted: {sub.fileName}</span>
+                  <button onClick={() => setUploadingFor(a.id)} className="text-xs" style={{ color: NAVY }}>Replace answer</button>
+                  {uploadingFor === a.id && <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />}
+                </div>
+              ) : uploadingFor === a.id ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />
+                  {busyId === a.id && <span className="text-xs text-gray-400">Uploading…</span>}
+                </div>
+              ) : (
+                <button onClick={() => setUploadingFor(a.id)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>Upload your answer</button>
+              )}
+              {err && uploadingFor === a.id && <p className="text-xs text-red-600 mt-1">{err}</p>}
+            </div>
           </div>
-          <p className="text-sm text-gray-600 mt-1">{a.description}</p>
-          {a.dueDate && <p className="text-xs text-gray-400 mt-1">Due {a.dueDate}</p>}
-        </div>
-      ))}
+        );
+      })}
       {items.length === 0 && <p className="text-sm text-gray-400">Nothing posted for your courses yet.</p>}
     </div>
   );
@@ -1380,6 +1533,7 @@ function Dashboard({ user }) {
   const [results, setResults] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [liveClasses, setLiveClasses] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
 
   useEffect(() => {
     const unsubs = [
@@ -1391,6 +1545,7 @@ function Dashboard({ user }) {
       FB().subCollection("results", setResults),
       FB().subCollection("announcements", setAnnouncements, { orderBy: ["createdAt", "desc"] }),
       FB().subCollection("liveclasses", setLiveClasses),
+      FB().subCollection("submissions", setSubmissions),
     ];
     if (user.role === "admin" || user.role === "bursar" || user.role === "student") unsubs.push(FB().subCollection("fees", setFees));
     return () => unsubs.forEach((u) => u && u());
@@ -1416,7 +1571,7 @@ function Dashboard({ user }) {
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements} courses={courses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "lecturer") {
     if (page === "overview") content = <LecturerCourses myCourses={myCourses} allUsers={users} />;
-    if (page === "assignments") content = <LecturerAssignments myCourses={myCourses} items={assignments.filter((a) => myCourseIds.has(a.courseId))} />;
+    if (page === "assignments") content = <LecturerAssignments myCourses={myCourses} items={assignments.filter((a) => myCourseIds.has(a.courseId))} submissions={submissions.filter((s) => myCourseIds.has(s.courseId))} />;
     if (page === "notes") content = <LecturerNotes myCourses={myCourses} notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
     if (page === "results") content = <LecturerResults myCourses={myCourses} allUsers={users} results={results.filter((r) => myCourseIds.has(r.courseId))} />;
     if (page === "liveclasses") content = <LecturerLiveClasses myCourses={myCourses} classes={liveClasses.filter((c) => myCourseIds.has(c.courseId))} />;
@@ -1424,7 +1579,7 @@ function Dashboard({ user }) {
   } else if (user.role === "student") {
     const myFee = fees.find((f) => f.id === user.uid) || null;
     if (page === "overview") content = <StudentCourses myCourses={myCourses} />;
-    if (page === "work") content = <StudentWork items={assignments.filter((a) => myCourseIds.has(a.courseId))} />;
+    if (page === "work") content = <StudentWork items={assignments.filter((a) => myCourseIds.has(a.courseId))} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
     if (page === "results") content = <ResultsTable results={results.filter((r) => r.studentId === user.uid)} />;
     if (page === "notes") content = <StudentNotes notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
     if (page === "fees") content = <StudentFees fee={myFee} />;
