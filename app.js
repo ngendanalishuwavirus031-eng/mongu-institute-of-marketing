@@ -7,6 +7,9 @@ const TERMS = ["2026 Term 1", "2026 Term 2", "2026 Term 3"];
 
 function cx(...a) { return a.filter(Boolean).join(" "); }
 
+const ROLE_LABELS = { admin: "Admin", lecturer: "Lecturer", student: "Student", bursar: "Accountant" };
+function roleLabel(role) { return ROLE_LABELS[role] || role; }
+
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 }
@@ -176,7 +179,7 @@ function ProfileModal({ user, onClose }) {
       <div className="text-sm space-y-1 border-t pt-4">
         <p><span className="text-gray-500">Name:</span> {user.name}</p>
         <p><span className="text-gray-500">Email:</span> {user.email}</p>
-        <p><span className="text-gray-500">Role:</span> {user.role}</p>
+        <p><span className="text-gray-500">Role:</span> {roleLabel(user.role)}</p>
         <p className="font-mono text-[10px] text-gray-400 break-all"><span className="text-gray-500 font-sans">Account ID:</span> {user.uid}</p>
         {user.studentId && <p><span className="text-gray-500">Student No:</span> {user.studentId}</p>}
         {user.examNumber && <p><span className="text-gray-500">Exam No:</span> {user.examNumber}</p>}
@@ -205,15 +208,18 @@ const NAV_ITEMS = {
   admin: [
     ["overview", "Overview"], ["users", "Manage Users"], ["courses", "Courses"],
     ["programmes", "Programmes & Fees"],
-    ["fees", "Fees Overview"], ["results", "Results"], ["announcements", "Announcements"],
+    ["fees", "Fees Overview"], ["results", "Results"],
+    ["liveclasses", "Online Learning"], ["announcements", "Announcements"],
   ],
   lecturer: [
     ["overview", "My Courses"], ["assignments", "Assignments & Quizzes"],
-    ["notes", "Notes"], ["results", "Term Results"], ["announcements", "Announcements"],
+    ["notes", "Notes"], ["results", "Term Results"],
+    ["liveclasses", "Online Learning"], ["announcements", "Announcements"],
   ],
   student: [
     ["overview", "My Courses"], ["work", "Assignments & Quizzes"],
-    ["results", "My Results"], ["notes", "Notes"], ["fees", "My Fees"], ["announcements", "Announcements"],
+    ["results", "My Results"], ["notes", "Notes"], ["fees", "My Fees"],
+    ["liveclasses", "Online Learning"], ["announcements", "Announcements"],
   ],
   bursar: [
     ["fees", "Fees Overview"],
@@ -242,7 +248,7 @@ function Shell({ user, page, setPage, children }) {
           <img src="logo.jpg" alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
           <div>
             <div className="font-serif font-semibold leading-tight">MIM Portal</div>
-            <div className="text-[11px] text-white/50 capitalize">{user.role} dashboard</div>
+            <div className="text-[11px] text-white/50">{roleLabel(user.role)} dashboard</div>
           </div>
         </div>
         <nav className="flex-1 py-3 overflow-y-auto">
@@ -261,7 +267,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.3</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.4</p>
         </div>
       </aside>
 
@@ -341,7 +347,7 @@ function AdminOverview({ users, courses, fees, results, assignments, announcemen
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard label="Students" value={counts.student} icon="🎓" />
         <StatCard label="Lecturers" value={counts.lecturer} icon="🧑‍🏫" />
-        <StatCard label="Bursars" value={counts.bursar} icon="💼" />
+        <StatCard label="Accountants" value={counts.bursar} icon="💼" />
         <StatCard label="Courses" value={courses.length} icon="📚" />
       </div>
 
@@ -417,7 +423,7 @@ function AdminUsers({ users, programmes }) {
               <div className="min-w-0">
                 <div className="font-medium text-sm truncate">{u.name}</div>
                 <div className="text-xs text-gray-400 truncate">{u.email}</div>
-                <div className="text-xs text-gray-500 capitalize mt-0.5">{u.role}{u.studentId ? ` · ${u.studentId}` : ""}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{roleLabel(u.role)}{u.studentId ? ` · ${u.studentId}` : ""}</div>
                 <div className="text-[10px] text-gray-300 mt-0.5 font-mono">ID: {u.uid}</div>
               </div>
               <div className="shrink-0 flex gap-3">
@@ -442,7 +448,7 @@ function AdminUsers({ users, programmes }) {
             <Field label="Role">
               <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 <option value="student">Student</option><option value="lecturer">Lecturer</option>
-                <option value="bursar">Bursar</option><option value="admin">Admin</option>
+                <option value="bursar">Accountant</option><option value="admin">Admin</option>
               </select>
             </Field>
             <Field label="Full name"><input required className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
@@ -752,6 +758,8 @@ function FeesTable({ fees, editable }) {
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [editIdx, setEditIdx] = useState(null);
+  const [editAmount, setEditAmount] = useState("");
 
   async function recordPayment() {
     setErr("");
@@ -759,13 +767,48 @@ function FeesTable({ fees, editable }) {
     if (!amt || amt <= 0) { setErr("Enter an amount greater than 0."); return; }
     setBusy(true);
     try {
-      await FB().updateDoc(`fees/${payUser.id}`, {
-        balance: FB().increment(-amt),
-        payments: FB().arrayUnion({ amount: amt, date: new Date().toISOString() }),
-      });
-      setPayUser(null); setAmount("");
+      const updated = [...(payUser.payments || []), { amount: amt, date: new Date().toISOString() }];
+      const newBalance = (payUser.balance || 0) - amt;
+      await FB().setDoc(`fees/${payUser.id}`, { balance: newBalance, payments: updated });
+      setPayUser({ ...payUser, balance: newBalance, payments: updated });
+      setAmount("");
     } catch (e2) {
       setErr(e2.message || "Could not save this payment. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEditedPayment(idx) {
+    setErr("");
+    const newAmt = Number(editAmount);
+    if (!newAmt || newAmt <= 0) { setErr("Enter an amount greater than 0."); return; }
+    setBusy(true);
+    try {
+      const payments = [...(payUser.payments || [])];
+      const oldAmt = payments[idx].amount;
+      payments[idx] = { ...payments[idx], amount: newAmt };
+      const newBalance = (payUser.balance || 0) + oldAmt - newAmt;
+      await FB().setDoc(`fees/${payUser.id}`, { balance: newBalance, payments });
+      setPayUser({ ...payUser, balance: newBalance, payments });
+      setEditIdx(null); setEditAmount("");
+    } catch (e2) {
+      setErr(e2.message || "Could not update this payment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deletePayment(idx) {
+    setBusy(true); setErr("");
+    try {
+      const payments = [...(payUser.payments || [])];
+      const removed = payments.splice(idx, 1)[0];
+      const newBalance = (payUser.balance || 0) + (removed ? removed.amount : 0);
+      await FB().setDoc(`fees/${payUser.id}`, { balance: newBalance, payments });
+      setPayUser({ ...payUser, balance: newBalance, payments });
+    } catch (e2) {
+      setErr(e2.message || "Could not remove this payment.");
     } finally {
       setBusy(false);
     }
@@ -789,8 +832,8 @@ function FeesTable({ fees, editable }) {
             <div><span className="text-xs text-gray-400 block">Balance</span>K{(f.balance || 0).toLocaleString()}</div>
           </div>
           {editable && (
-            <button onClick={() => { setPayUser(f); setErr(""); setAmount(""); }} className="mt-3 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
-              Record payment
+            <button onClick={() => { setPayUser(f); setErr(""); setAmount(""); setEditIdx(null); }} className="mt-3 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
+              Manage payments
             </button>
           )}
         </div>
@@ -798,10 +841,34 @@ function FeesTable({ fees, editable }) {
       {fees.length === 0 && <p className="text-sm text-gray-400">No fee records yet.</p>}
 
       {payUser && (
-        <Modal title={`Record payment — ${payUser.studentName}`} onClose={() => setPayUser(null)}>
+        <Modal title={`Payments — ${payUser.studentName}`} onClose={() => setPayUser(null)} wide>
+          <p className="text-xs text-gray-400 mb-2">Payment history</p>
+          <div className="border rounded-lg divide-y mb-4 max-h-52 overflow-y-auto">
+            {(payUser.payments || []).length === 0 && <p className="p-3 text-xs text-gray-400">No payments recorded yet.</p>}
+            {(payUser.payments || []).map((p, idx) => (
+              <div key={idx} className="p-2.5 flex items-center justify-between gap-2">
+                {editIdx === idx ? (
+                  <>
+                    <input type="number" autoFocus className={inputCls + " flex-1"} value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+                    <button disabled={busy} onClick={() => saveEditedPayment(idx)} className="text-xs" style={{ color: NAVY }}>Save</button>
+                    <button onClick={() => setEditIdx(null)} className="text-xs text-gray-400">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm">K{p.amount.toLocaleString()} <span className="text-xs text-gray-400">— {new Date(p.date).toLocaleDateString()}</span></div>
+                    <div className="flex gap-3 shrink-0">
+                      <button onClick={() => { setEditIdx(idx); setEditAmount(String(p.amount)); }} className="text-xs" style={{ color: NAVY }}>Edit</button>
+                      <button disabled={busy} onClick={() => deletePayment(idx)} className="text-xs text-red-500">Delete</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mb-2">Add a new payment</p>
           <Field label="Amount (K)"><input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
           {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-          <button disabled={busy} onClick={recordPayment} className="w-full py-2.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: NAVY }}>{busy ? "Saving…" : "Save payment"}</button>
+          <button disabled={busy} onClick={recordPayment} className="w-full py-2.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: NAVY }}>{busy ? "Saving…" : "Add payment"}</button>
         </Modal>
       )}
     </div>
@@ -887,6 +954,102 @@ function AnnouncementsBoard({ announcements, courses, canPost, postScope, curren
         ))}
         {announcements.length === 0 && <p className="text-sm text-gray-400">No announcements yet.</p>}
       </div>
+    </div>
+  );
+}
+
+function fmtSchedule(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + " · " +
+    d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function LecturerLiveClasses({ myCourses, classes }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [delClass, setDelClass] = useState(null);
+  const [form, setForm] = useState({ courseId: "", title: "", link: "", scheduledAt: "" });
+  const [err, setErr] = useState("");
+
+  async function add(e) {
+    e.preventDefault();
+    setErr("");
+    const course = myCourses.find((c) => c.id === form.courseId);
+    if (!course) { setErr("Please select a course."); return; }
+    try {
+      await FB().addDoc("liveclasses", {
+        courseId: form.courseId, courseName: course.name, title: form.title, link: form.link,
+        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
+        createdAt: FB().serverTimestamp(),
+      });
+      setShowAdd(false); setForm({ courseId: "", title: "", link: "", scheduledAt: "" });
+    } catch (e2) {
+      setErr(e2.message || "Could not schedule this class.");
+    }
+  }
+
+  const sorted = [...classes].sort((a, b) => (a.scheduledAt || "").localeCompare(b.scheduledAt || ""));
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
+        <p className="text-sm text-gray-500">{classes.length} scheduled</p>
+        <button onClick={() => setShowAdd(true)} disabled={myCourses.length === 0} className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-40" style={{ background: NAVY }}>+ Schedule live class</button>
+      </div>
+      <div className="space-y-2">
+        {sorted.map((c) => (
+          <div key={c.id} className="bg-white rounded-xl border p-4">
+            <div className="flex justify-between items-start gap-2">
+              <div className="min-w-0">
+                <div className="font-medium text-sm">{c.title}</div>
+                <div className="text-xs text-gray-500">{c.courseName}</div>
+                {c.scheduledAt && <div className="text-xs text-gray-400 mt-1">{fmtSchedule(c.scheduledAt)}</div>}
+              </div>
+              <button onClick={() => setDelClass(c)} className="shrink-0 text-xs text-red-500">Delete</button>
+            </div>
+            <a href={c.link} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>Open link</a>
+          </div>
+        ))}
+        {classes.length === 0 && <p className="text-sm text-gray-400">No live classes scheduled yet.</p>}
+      </div>
+
+      {showAdd && (
+        <Modal title="Schedule live class" onClose={() => setShowAdd(false)}>
+          <form onSubmit={add}>
+            <Field label="Course">
+              <select required className={inputCls} value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
+                <option value="">Select…</option>{myCourses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Title"><input required placeholder="e.g. Week 4 Lecture" className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+            <Field label="Meeting link (Zoom / Google Meet)"><input required type="url" placeholder="https://..." className={inputCls} value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} /></Field>
+            <Field label="Date & time"><input type="datetime-local" className={inputCls} value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} /></Field>
+            {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+            <button className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>Schedule</button>
+          </form>
+        </Modal>
+      )}
+      {delClass && (
+        <ConfirmModal title={`Cancel "${delClass.title}"?`} onNo={() => setDelClass(null)}
+          onYes={async () => { await FB().deleteDoc(`liveclasses/${delClass.id}`); setDelClass(null); }} />
+      )}
+    </div>
+  );
+}
+
+function StudentLiveClasses({ classes }) {
+  const sorted = [...classes].sort((a, b) => (a.scheduledAt || "").localeCompare(b.scheduledAt || ""));
+  return (
+    <div className="space-y-2">
+      {sorted.map((c) => (
+        <div key={c.id} className="bg-white rounded-xl border p-4">
+          <div className="font-medium text-sm">{c.title}</div>
+          <div className="text-xs text-gray-500">{c.courseName}</div>
+          {c.scheduledAt && <div className="text-xs text-gray-400 mt-1">{fmtSchedule(c.scheduledAt)}</div>}
+          <a href={c.link} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>Join class</a>
+        </div>
+      ))}
+      {classes.length === 0 && <p className="text-sm text-gray-400">No live classes scheduled for your courses yet.</p>}
     </div>
   );
 }
@@ -1216,6 +1379,7 @@ function Dashboard({ user }) {
   const [notes, setNotes] = useState([]);
   const [results, setResults] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [liveClasses, setLiveClasses] = useState([]);
 
   useEffect(() => {
     const unsubs = [
@@ -1226,6 +1390,7 @@ function Dashboard({ user }) {
       FB().subCollection("notes", setNotes),
       FB().subCollection("results", setResults),
       FB().subCollection("announcements", setAnnouncements, { orderBy: ["createdAt", "desc"] }),
+      FB().subCollection("liveclasses", setLiveClasses),
     ];
     if (user.role === "admin" || user.role === "bursar" || user.role === "student") unsubs.push(FB().subCollection("fees", setFees));
     return () => unsubs.forEach((u) => u && u());
@@ -1247,12 +1412,14 @@ function Dashboard({ user }) {
     if (page === "programmes") content = <AdminProgrammes programmes={programmes} />;
     if (page === "fees") content = <FeesPage fees={fees} />;
     if (page === "results") content = <ResultsTable results={results} showStudent />;
+    if (page === "liveclasses") content = <StudentLiveClasses classes={liveClasses} />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements} courses={courses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "lecturer") {
     if (page === "overview") content = <LecturerCourses myCourses={myCourses} allUsers={users} />;
     if (page === "assignments") content = <LecturerAssignments myCourses={myCourses} items={assignments.filter((a) => myCourseIds.has(a.courseId))} />;
     if (page === "notes") content = <LecturerNotes myCourses={myCourses} notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
     if (page === "results") content = <LecturerResults myCourses={myCourses} allUsers={users} results={results.filter((r) => myCourseIds.has(r.courseId))} />;
+    if (page === "liveclasses") content = <LecturerLiveClasses myCourses={myCourses} classes={liveClasses.filter((c) => myCourseIds.has(c.courseId))} />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "student") {
     const myFee = fees.find((f) => f.id === user.uid) || null;
@@ -1261,6 +1428,7 @@ function Dashboard({ user }) {
     if (page === "results") content = <ResultsTable results={results.filter((r) => r.studentId === user.uid)} />;
     if (page === "notes") content = <StudentNotes notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
     if (page === "fees") content = <StudentFees fee={myFee} />;
+    if (page === "liveclasses") content = <StudentLiveClasses classes={liveClasses.filter((c) => myCourseIds.has(c.courseId))} />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost={false} currentUser={user} />;
   } else if (user.role === "bursar") {
     if (page === "fees") content = <FeesPage fees={fees} />;
