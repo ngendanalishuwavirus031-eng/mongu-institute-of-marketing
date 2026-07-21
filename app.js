@@ -267,7 +267,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.7</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.8</p>
         </div>
       </aside>
 
@@ -1056,8 +1056,41 @@ function StudentLiveClasses({ classes }) {
 }
 
 // ============================================================= LECTURER ===
-function LecturerCourses({ myCourses, allUsers }) {
+function CourseDetailModal({ course, role, notes, assignments, liveClasses, results, submissions, allUsers, currentUser, onClose }) {
+  const tabs = role === "lecturer"
+    ? [["notes", "Notes"], ["assignments", "Assignments & Quizzes"], ["liveclasses", "Online Learning"], ["results", "Results"]]
+    : [["notes", "Notes"], ["work", "Assignments & Quizzes"], ["liveclasses", "Online Learning"], ["results", "My Results"]];
+  const [tab, setTab] = useState(tabs[0][0]);
+  const myCourseArr = [course];
+
+  return (
+    <Modal title={course.name} onClose={onClose} wide>
+      <div className="flex flex-wrap gap-1.5 mb-4 -mt-1">
+        {tabs.map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={cx("text-xs px-3 py-1.5 rounded-full border", tab === key ? "text-white" : "text-gray-600")}
+            style={tab === key ? { background: NAVY, borderColor: NAVY } : { borderColor: "#e5e7eb" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {role === "lecturer" && tab === "notes" && <LecturerNotes myCourses={myCourseArr} notes={notes} />}
+      {role === "lecturer" && tab === "assignments" && <LecturerAssignments myCourses={myCourseArr} items={assignments} submissions={submissions} />}
+      {role === "lecturer" && tab === "liveclasses" && <LecturerLiveClasses myCourses={myCourseArr} classes={liveClasses} />}
+      {role === "lecturer" && tab === "results" && <LecturerResults myCourses={myCourseArr} allUsers={allUsers} results={results} />}
+
+      {role === "student" && tab === "notes" && <StudentNotes notes={notes} />}
+      {role === "student" && tab === "work" && <StudentWork items={assignments} submissions={submissions} currentUser={currentUser} />}
+      {role === "student" && tab === "liveclasses" && <StudentLiveClasses classes={liveClasses} />}
+      {role === "student" && tab === "results" && <ResultsTable results={results} />}
+    </Modal>
+  );
+}
+
+function LecturerCourses({ myCourses, allUsers, notes, assignments, liveClasses, results, submissions }) {
   const [manage, setManage] = useState(null); // course being managed
+  const [viewCourse, setViewCourse] = useState(null);
   const [search, setSearch] = useState("");
 
   const candidates = useMemo(() => {
@@ -1084,7 +1117,10 @@ function LecturerCourses({ myCourses, allUsers }) {
           <div key={c.id} className="bg-white rounded-xl border p-4">
             <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
             <p className="text-xs text-gray-500 mt-1 mb-3">{(c.studentIds || []).length} students enrolled</p>
-            <button onClick={() => setManage(c)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>Manage students</button>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setViewCourse(c)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>View course</button>
+              <button onClick={() => setManage(c)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>Manage students</button>
+            </div>
           </div>
         ))}
       </div>
@@ -1121,6 +1157,18 @@ function LecturerCourses({ myCourses, allUsers }) {
             {(manage.studentIds || []).length === 0 && <p className="p-2 text-xs text-gray-400">No students yet.</p>}
           </div>
         </Modal>
+      )}
+      {viewCourse && (
+        <CourseDetailModal
+          course={viewCourse} role="lecturer"
+          notes={notes.filter((n) => n.courseId === viewCourse.id)}
+          assignments={assignments.filter((a) => a.courseId === viewCourse.id)}
+          liveClasses={liveClasses.filter((c) => c.courseId === viewCourse.id)}
+          results={results.filter((r) => r.courseId === viewCourse.id)}
+          submissions={submissions.filter((s) => s.courseId === viewCourse.id)}
+          allUsers={allUsers}
+          onClose={() => setViewCourse(null)}
+        />
       )}
     </div>
   );
@@ -1404,7 +1452,8 @@ function LecturerResults({ myCourses, allUsers, results }) {
 }
 
 // ============================================================== STUDENT ===
-function StudentCourses({ myCourses, programme }) {
+function StudentCourses({ myCourses, programme, notes, assignments, liveClasses, results, submissions, currentUser }) {
+  const [viewCourse, setViewCourse] = useState(null);
   return (
     <div>
       {programme ? (
@@ -1423,10 +1472,23 @@ function StudentCourses({ myCourses, programme }) {
         {myCourses.map((c) => (
           <div key={c.id} className="bg-white rounded-xl border p-4">
             <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
+            <button onClick={() => setViewCourse(c)} className="mt-2 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>View course</button>
           </div>
         ))}
         {myCourses.length === 0 && <p className="text-sm text-gray-400">You're not enrolled in any course yet — your lecturer or admin adds you.</p>}
       </div>
+      {viewCourse && (
+        <CourseDetailModal
+          course={viewCourse} role="student"
+          notes={notes.filter((n) => n.courseId === viewCourse.id)}
+          assignments={assignments.filter((a) => a.courseId === viewCourse.id)}
+          liveClasses={liveClasses.filter((c) => c.courseId === viewCourse.id)}
+          results={results.filter((r) => r.courseId === viewCourse.id)}
+          submissions={submissions.filter((s) => s.courseId === viewCourse.id)}
+          currentUser={currentUser}
+          onClose={() => setViewCourse(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1578,7 +1640,7 @@ function Dashboard({ user }) {
     if (page === "liveclasses") content = <StudentLiveClasses classes={liveClasses} />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements} courses={courses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "lecturer") {
-    if (page === "overview") content = <LecturerCourses myCourses={myCourses} allUsers={users} />;
+    if (page === "overview") content = <LecturerCourses myCourses={myCourses} allUsers={users} notes={notes.filter((n) => myCourseIds.has(n.courseId))} assignments={assignments.filter((a) => myCourseIds.has(a.courseId))} liveClasses={liveClasses.filter((c) => myCourseIds.has(c.courseId))} results={results.filter((r) => myCourseIds.has(r.courseId))} submissions={submissions.filter((s) => myCourseIds.has(s.courseId))} />;
     if (page === "assignments") content = <LecturerAssignments myCourses={myCourses} items={assignments.filter((a) => myCourseIds.has(a.courseId))} submissions={submissions.filter((s) => myCourseIds.has(s.courseId))} />;
     if (page === "notes") content = <LecturerNotes myCourses={myCourses} notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
     if (page === "results") content = <LecturerResults myCourses={myCourses} allUsers={users} results={results.filter((r) => myCourseIds.has(r.courseId))} />;
@@ -1586,7 +1648,7 @@ function Dashboard({ user }) {
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "student") {
     const myFee = fees.find((f) => f.id === user.uid) || null;
-    if (page === "overview") content = <StudentCourses myCourses={myCourses} programme={programmes.find((p) => p.id === user.programmeId)} />;
+    if (page === "overview") content = <StudentCourses myCourses={myCourses} programme={programmes.find((p) => p.id === user.programmeId)} notes={notes.filter((n) => myCourseIds.has(n.courseId))} assignments={assignments.filter((a) => myCourseIds.has(a.courseId))} liveClasses={liveClasses.filter((c) => myCourseIds.has(c.courseId))} results={results.filter((r) => r.studentId === user.uid)} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
     if (page === "work") content = <StudentWork items={assignments.filter((a) => myCourseIds.has(a.courseId))} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
     if (page === "results") content = <ResultsTable results={results.filter((r) => r.studentId === user.uid)} />;
     if (page === "notes") content = <StudentNotes notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
