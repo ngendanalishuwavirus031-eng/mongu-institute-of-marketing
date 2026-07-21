@@ -267,7 +267,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.6</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.7</p>
         </div>
       </aside>
 
@@ -1404,15 +1404,29 @@ function LecturerResults({ myCourses, allUsers, results }) {
 }
 
 // ============================================================== STUDENT ===
-function StudentCourses({ myCourses }) {
+function StudentCourses({ myCourses, programme }) {
   return (
-    <div className="grid md:grid-cols-2 gap-4">
-      {myCourses.map((c) => (
-        <div key={c.id} className="bg-white rounded-xl border p-4">
-          <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
+    <div>
+      {programme ? (
+        <div className="rounded-xl p-4 mb-4 text-white" style={{ background: NAVY }}>
+          <p className="text-xs text-white/60">Enrolled Program</p>
+          <p className="font-serif text-lg font-semibold">{programme.name}</p>
+          {programme.duration && <p className="text-xs text-white/70 mt-0.5">{programme.duration}</p>}
         </div>
-      ))}
-      {myCourses.length === 0 && <p className="text-sm text-gray-400">You're not enrolled in any course yet — your lecturer or admin adds you.</p>}
+      ) : (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+          No program on file for your account yet — ask the Admin to set your programme under Manage Users.
+        </p>
+      )}
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Courses in this program</p>
+      <div className="grid md:grid-cols-2 gap-4">
+        {myCourses.map((c) => (
+          <div key={c.id} className="bg-white rounded-xl border p-4">
+            <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
+          </div>
+        ))}
+        {myCourses.length === 0 && <p className="text-sm text-gray-400">You're not enrolled in any course yet — your lecturer or admin adds you.</p>}
+      </div>
     </div>
   );
 }
@@ -1572,7 +1586,7 @@ function Dashboard({ user }) {
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "student") {
     const myFee = fees.find((f) => f.id === user.uid) || null;
-    if (page === "overview") content = <StudentCourses myCourses={myCourses} />;
+    if (page === "overview") content = <StudentCourses myCourses={myCourses} programme={programmes.find((p) => p.id === user.programmeId)} />;
     if (page === "work") content = <StudentWork items={assignments.filter((a) => myCourseIds.has(a.courseId))} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
     if (page === "results") content = <ResultsTable results={results.filter((r) => r.studentId === user.uid)} />;
     if (page === "notes") content = <StudentNotes notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
