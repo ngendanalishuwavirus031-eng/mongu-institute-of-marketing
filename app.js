@@ -206,8 +206,8 @@ function ProfileModal({ user, onClose }) {
 
 const NAV_ITEMS = {
   admin: [
-    ["overview", "Overview"], ["users", "Manage Users"], ["courses", "Courses"],
-    ["programmes", "Programmes & Fees"],
+    ["overview", "Overview"], ["users", "Manage Users"],
+    ["programmes", "Programs & Fees"],
     ["fees", "Fees Overview"], ["results", "Results"],
     ["liveclasses", "Online Learning"], ["announcements", "Announcements"],
   ],
@@ -267,7 +267,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.5</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.6</p>
         </div>
       </aside>
 
@@ -506,11 +506,11 @@ function AdminUsers({ users, programmes }) {
   );
 }
 
-function AdminCourses({ courses, users, programmes }) {
+function ProgramCourses({ programmeId, courses, users }) {
   const [showAdd, setShowAdd] = useState(false);
   const [assignCourse, setAssignCourse] = useState(null);
   const [delCourse, setDelCourse] = useState(null);
-  const [form, setForm] = useState({ name: "", code: "", programmeId: "", lecturerId: "" });
+  const [form, setForm] = useState({ name: "", code: "", lecturerId: "" });
   const [err, setErr] = useState("");
   const lecturers = users.filter((u) => u.role === "lecturer");
 
@@ -518,8 +518,8 @@ function AdminCourses({ courses, users, programmes }) {
     e.preventDefault();
     setErr("");
     try {
-      await FB().addDoc("courses", { ...form, studentIds: [], createdAt: FB().serverTimestamp() });
-      setShowAdd(false); setForm({ name: "", code: "", programmeId: "", lecturerId: "" });
+      await FB().addDoc("courses", { ...form, programmeId, studentIds: [], createdAt: FB().serverTimestamp() });
+      setShowAdd(false); setForm({ name: "", code: "", lecturerId: "" });
     } catch (e2) {
       setErr(e2.message || "Could not create the course. Please try again.");
     }
@@ -528,52 +528,46 @@ function AdminCourses({ courses, users, programmes }) {
   async function saveLecturer(courseId, lecturerId) {
     try {
       await FB().updateDoc(`courses/${courseId}`, { lecturerId: lecturerId || null });
-      window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path: "SAVE RESULT", err: { code: "success", message: "Lecturer assignment saved OK for course " + courseId } } }));
     } catch (e2) {
-      window.dispatchEvent(new CustomEvent("firebase-error", { detail: { path: "SAVE RESULT", err: { code: "FAILED", message: (e2 && e2.message) ? e2.message : JSON.stringify(e2) } } }));
+      alert("Could not save: " + (e2 && e2.message ? e2.message : "unknown error"));
     }
     setAssignCourse(null);
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
-        <p className="text-sm text-gray-500">{courses.length} courses{lecturers.length === 0 ? " · 0 lecturer accounts exist" : ""}</p>
-        <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-lg text-white text-sm" style={{ background: NAVY }}>+ Add course</button>
+    <div className="mt-3 pt-3 border-t">
+      <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Courses ({courses.length})</p>
+        <button onClick={() => setShowAdd(true)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>+ Add course</button>
       </div>
       {lecturers.length === 0 && (
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-          No lecturer accounts exist yet, so there's nothing to pick in "Assign lecturer." Go to Manage Users → + Add user → choose Role "Lecturer" first.
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
+          No lecturer accounts exist yet — add one under Manage Users to assign courses.
         </p>
       )}
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="space-y-2">
         {courses.map((c) => {
           const lec = users.find((u) => u.uid === c.lecturerId);
           return (
-            <div key={c.id} className="bg-white rounded-xl border p-4">
+            <div key={c.id} className="bg-gray-50 rounded-lg p-3">
               <div className="flex justify-between items-start gap-2">
-                <div className="font-serif font-semibold" style={{ color: NAVY }}>{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
+                <div className="text-sm font-medium">{c.name} <span className="text-xs text-gray-400">({c.code})</span></div>
                 <button onClick={() => setDelCourse(c)} className="shrink-0 text-xs text-red-500">Delete</button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Lecturer: {lec ? lec.name : "Unassigned"}</p>
-              <p className="text-xs text-gray-500 mb-3">Students enrolled: {(c.studentIds || []).length}</p>
-              <button onClick={() => setAssignCourse(c)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
+              <p className="text-xs text-gray-500 mt-0.5">Lecturer: {lec ? lec.name : "Unassigned"} · {(c.studentIds || []).length} students</p>
+              <button onClick={() => setAssignCourse(c)} className="mt-1.5 text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
                 {lec ? "Change lecturer" : "Assign lecturer"}
               </button>
             </div>
           );
         })}
+        {courses.length === 0 && <p className="text-xs text-gray-400">No courses under this programme yet.</p>}
       </div>
       {showAdd && (
         <Modal title="Add course" onClose={() => setShowAdd(false)}>
           <form onSubmit={addCourse}>
             <Field label="Course name"><input required className={inputCls} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Course code"><input required className={inputCls} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>
-            <Field label="Programme">
-              <select required className={inputCls} value={form.programmeId} onChange={(e) => setForm({ ...form, programmeId: e.target.value })}>
-                <option value="">Select…</option>{programmes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
             <Field label="Lecturer">
               <select className={inputCls} value={form.lecturerId} onChange={(e) => setForm({ ...form, lecturerId: e.target.value })}>
                 <option value="">Unassigned for now</option>{lecturers.map((l) => <option key={l.uid} value={l.uid}>{l.name}</option>)}
@@ -612,7 +606,7 @@ const BROCHURE_GENERAL_FEES = [
   { name: "ID", amount: 150 },
 ];
 
-function AdminProgrammes({ programmes }) {
+function AdminProgrammes({ programmes, courses, users }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editProg, setEditProg] = useState(null);
   const [delProg, setDelProg] = useState(null);
@@ -695,6 +689,7 @@ function AdminProgrammes({ programmes }) {
               <div><span className="text-gray-400 block">Registration</span><span className="font-medium">K{(p.reg || 0).toLocaleString()}</span></div>
               <div><span className="text-gray-400 block">Admin fee</span><span className="font-medium">K{(p.admin || 0).toLocaleString()}</span></div>
             </div>
+            <ProgramCourses programmeId={p.id} courses={courses.filter((c) => c.programmeId === p.id)} users={users} />
           </div>
         ))}
         {programmes.length === 0 && <p className="text-sm text-gray-400">No programmes yet — add your first one above.</p>}
@@ -1563,8 +1558,7 @@ function Dashboard({ user }) {
   if (user.role === "admin") {
     if (page === "overview") content = <AdminOverview users={users} courses={courses} fees={fees} results={results} assignments={assignments} announcements={announcements} />;
     if (page === "users") content = <AdminUsers users={users} programmes={programmes} />;
-    if (page === "courses") content = <AdminCourses courses={courses} users={users} programmes={programmes} />;
-    if (page === "programmes") content = <AdminProgrammes programmes={programmes} />;
+    if (page === "programmes") content = <AdminProgrammes programmes={programmes} courses={courses} users={users} />;
     if (page === "fees") content = <FeesPage fees={fees} />;
     if (page === "results") content = <ResultsTable results={results} showStudent />;
     if (page === "liveclasses") content = <StudentLiveClasses classes={liveClasses} />;
