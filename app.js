@@ -10,6 +10,12 @@ function cx(...a) { return a.filter(Boolean).join(" "); }
 const ROLE_LABELS = { admin: "Admin", lecturer: "Lecturer", student: "Student", bursar: "Accountant" };
 function roleLabel(role) { return ROLE_LABELS[role] || role; }
 
+function visibleToCohort(item, course, uid) {
+  if (!item.cohort || item.cohort === "all") return true;
+  const myCohort = course && course.studentCohorts ? course.studentCohorts[uid] : null;
+  return item.cohort === myCohort;
+}
+
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 }
@@ -236,6 +242,9 @@ function Shell({ user, page, setPage, children }) {
 
   return (
     <div className="min-h-screen flex" style={{ background: "#F6F3EA" }}>
+      <datalist id="cohort-suggestions">
+        {COHORT_OPTIONS.map((c) => <option key={c} value={c} />)}
+      </datalist>
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
@@ -267,7 +276,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-18.8</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.1</p>
         </div>
       </aside>
 
@@ -969,7 +978,7 @@ function fmtSchedule(iso) {
 function LecturerLiveClasses({ myCourses, classes }) {
   const [showAdd, setShowAdd] = useState(false);
   const [delClass, setDelClass] = useState(null);
-  const [form, setForm] = useState({ courseId: "", title: "", link: "", scheduledAt: "" });
+  const [form, setForm] = useState({ courseId: "", title: "", link: "", scheduledAt: "", cohort: "all" });
   const [err, setErr] = useState("");
 
   async function add(e) {
@@ -979,11 +988,11 @@ function LecturerLiveClasses({ myCourses, classes }) {
     if (!course) { setErr("Please select a course."); return; }
     try {
       await FB().addDoc("liveclasses", {
-        courseId: form.courseId, courseName: course.name, title: form.title, link: form.link,
+        courseId: form.courseId, courseName: course.name, title: form.title, link: form.link, cohort: form.cohort,
         scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
         createdAt: FB().serverTimestamp(),
       });
-      setShowAdd(false); setForm({ courseId: "", title: "", link: "", scheduledAt: "" });
+      setShowAdd(false); setForm({ courseId: "", title: "", link: "", scheduledAt: "", cohort: "all" });
     } catch (e2) {
       setErr(e2.message || "Could not schedule this class.");
     }
@@ -1004,6 +1013,7 @@ function LecturerLiveClasses({ myCourses, classes }) {
               <div className="min-w-0">
                 <div className="font-medium text-sm">{c.title}</div>
                 <div className="text-xs text-gray-500">{c.courseName}</div>
+                {c.cohort && c.cohort !== "all" && <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.cohort}</span>}
                 {c.scheduledAt && <div className="text-xs text-gray-400 mt-1">{fmtSchedule(c.scheduledAt)}</div>}
               </div>
               <button onClick={() => setDelClass(c)} className="shrink-0 text-xs text-red-500">Delete</button>
@@ -1025,6 +1035,16 @@ function LecturerLiveClasses({ myCourses, classes }) {
             <Field label="Title"><input required placeholder="e.g. Week 4 Lecture" className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Meeting link (Zoom / Google Meet)"><input required type="url" placeholder="https://..." className={inputCls} value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} /></Field>
             <Field label="Date & time"><input type="datetime-local" className={inputCls} value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} /></Field>
+            <Field label="Visible to">
+              <select className={inputCls} value={form.cohort === "all" ? "all" : "custom"} onChange={(e) => setForm({ ...form, cohort: e.target.value === "all" ? "all" : "" })}>
+                <option value="all">All students in this course</option>
+                <option value="custom">Just one group…</option>
+              </select>
+              {form.cohort !== "all" && (
+                <input className={inputCls + " mt-2"} list="cohort-suggestions" placeholder="e.g. 1 Year, 2 Years, 6 Months"
+                  value={form.cohort} onChange={(e) => setForm({ ...form, cohort: e.target.value })} />
+              )}
+            </Field>
             {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
             <button className="w-full py-2.5 rounded-lg text-white font-medium mt-1" style={{ background: NAVY }}>Schedule</button>
           </form>
@@ -1088,10 +1108,14 @@ function CourseDetailModal({ course, role, notes, assignments, liveClasses, resu
   );
 }
 
+const COHORT_OPTIONS = ["1 Year", "2 Years", "6 Months"];
+
 function LecturerCourses({ myCourses, allUsers, notes, assignments, liveClasses, results, submissions }) {
   const [manage, setManage] = useState(null); // course being managed
   const [viewCourse, setViewCourse] = useState(null);
   const [search, setSearch] = useState("");
+  const [pickCohortFor, setPickCohortFor] = useState(null); // candidate awaiting cohort pick
+  const [cohortChoice, setCohortChoice] = useState(COHORT_OPTIONS[0]);
 
   const candidates = useMemo(() => {
     if (!manage || !search) return [];
@@ -1100,13 +1124,22 @@ function LecturerCourses({ myCourses, allUsers, notes, assignments, liveClasses,
       (u.name.toLowerCase().includes(search.toLowerCase()) || (u.studentId || "").includes(search) || u.email.toLowerCase().includes(search.toLowerCase())));
   }, [manage, search, allUsers]);
 
-  async function addStudent(u) {
-    await FB().updateDoc(`courses/${manage.id}`, { studentIds: FB().arrayUnion(u.uid) });
-    setManage({ ...manage, studentIds: [...(manage.studentIds || []), u.uid] });
+  async function addStudent(u, cohort) {
+    const cohorts = { ...(manage.studentCohorts || {}), [u.uid]: cohort };
+    await FB().updateDoc(`courses/${manage.id}`, { studentIds: FB().arrayUnion(u.uid), studentCohorts: cohorts });
+    setManage({ ...manage, studentIds: [...(manage.studentIds || []), u.uid], studentCohorts: cohorts });
+    setPickCohortFor(null);
   }
   async function removeStudent(uid) {
-    await FB().updateDoc(`courses/${manage.id}`, { studentIds: FB().arrayRemove(uid) });
-    setManage({ ...manage, studentIds: (manage.studentIds || []).filter((id) => id !== uid) });
+    const cohorts = { ...(manage.studentCohorts || {}) };
+    delete cohorts[uid];
+    await FB().updateDoc(`courses/${manage.id}`, { studentIds: FB().arrayRemove(uid), studentCohorts: cohorts });
+    setManage({ ...manage, studentIds: (manage.studentIds || []).filter((id) => id !== uid), studentCohorts: cohorts });
+  }
+  async function changeCohort(uid, cohort) {
+    const cohorts = { ...(manage.studentCohorts || {}), [uid]: cohort };
+    await FB().updateDoc(`courses/${manage.id}`, { studentCohorts: cohorts });
+    setManage({ ...manage, studentCohorts: cohorts });
   }
 
   return (
@@ -1126,7 +1159,7 @@ function LecturerCourses({ myCourses, allUsers, notes, assignments, liveClasses,
       </div>
 
       {manage && (
-        <Modal wide title={`Manage students — ${manage.name}`} onClose={() => setManage(null)}>
+        <Modal wide title={`Manage students — ${manage.name}`} onClose={() => { setManage(null); setPickCohortFor(null); }}>
           <Field label="Find a student by name, email, or student number">
             <input className={inputCls} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Type to search…" />
           </Field>
@@ -1134,11 +1167,24 @@ function LecturerCourses({ myCourses, allUsers, notes, assignments, liveClasses,
             <p className="text-xs text-gray-400 mb-4">No matching student found. They may already be enrolled, or check the spelling — ask the Admin to confirm the student's account exists.</p>
           )}
           {candidates.length > 0 && (
-            <div className="border rounded-lg divide-y mb-4 max-h-40 overflow-y-auto">
+            <div className="border rounded-lg divide-y mb-4 max-h-52 overflow-y-auto">
               {candidates.map((u) => (
-                <div key={u.uid} className="flex justify-between items-center p-2 text-sm">
-                  <span>{u.name} <span className="text-xs text-gray-400">{u.studentId}</span></span>
-                  <button onClick={() => addStudent(u)} className="text-xs" style={{ color: NAVY }}>+ Add</button>
+                <div key={u.uid} className="p-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span>{u.name} <span className="text-xs text-gray-400">{u.studentId}</span></span>
+                    {pickCohortFor === u.uid ? null : (
+                      <button onClick={() => { setPickCohortFor(u.uid); setCohortChoice(""); }} className="text-xs" style={{ color: NAVY }}>+ Add</button>
+                    )}
+                  </div>
+                  {pickCohortFor === u.uid && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        className={inputCls} list="cohort-suggestions" placeholder="e.g. 1 Year, 2 Years, 6 Months"
+                        value={cohortChoice} onChange={(e) => setCohortChoice(e.target.value)}
+                      />
+                      <button disabled={!cohortChoice.trim()} onClick={() => addStudent(u, cohortChoice.trim())} className="text-xs px-3 py-1.5 rounded-lg text-white shrink-0 disabled:opacity-40" style={{ background: NAVY }}>Confirm</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1147,10 +1193,18 @@ function LecturerCourses({ myCourses, allUsers, notes, assignments, liveClasses,
           <div className="border rounded-lg divide-y max-h-52 overflow-y-auto">
             {(manage.studentIds || []).map((uid) => {
               const u = allUsers.find((x) => x.uid === uid);
+              const cohort = (manage.studentCohorts || {})[uid] || "";
               return (
-                <div key={uid} className="flex justify-between items-center p-2 text-sm">
-                  <span>{u ? u.name : uid}</span>
-                  <button onClick={() => removeStudent(uid)} className="text-xs text-red-500">Remove</button>
+                <div key={uid} className="flex justify-between items-center p-2 text-sm gap-2">
+                  <span className="truncate">{u ? u.name : uid}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      className="border border-gray-200 rounded px-2 py-1 text-xs w-28" list="cohort-suggestions"
+                      defaultValue={cohort} placeholder="Group"
+                      onBlur={(e) => { if (e.target.value.trim() !== cohort) changeCohort(uid, e.target.value.trim()); }}
+                    />
+                    <button onClick={() => removeStudent(uid)} className="text-xs text-red-500">Remove</button>
+                  </div>
                 </div>
               );
             })}
@@ -1179,20 +1233,20 @@ function LecturerAssignments({ myCourses, items, submissions }) {
   const [editItem, setEditItem] = useState(null);
   const [delItem, setDelItem] = useState(null);
   const [viewSubsFor, setViewSubsFor] = useState(null);
-  const [form, setForm] = useState({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "" });
+  const [form, setForm] = useState({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all" });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   function openAdd() {
     setEditItem(null);
-    setForm({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "" });
+    setForm({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all" });
     setFile(null); setErr("");
     setShowAdd(true);
   }
   function openEdit(a) {
     setEditItem(a);
-    setForm({ courseId: a.courseId, kind: a.kind, title: a.title, description: a.description || "", dueDate: a.dueDate || "" });
+    setForm({ courseId: a.courseId, kind: a.kind, title: a.title, description: a.description || "", dueDate: a.dueDate || "", cohort: a.cohort || "all" });
     setFile(null); setErr("");
     setShowAdd(true);
   }
@@ -1233,6 +1287,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
               <span className="font-serif font-semibold" style={{ color: NAVY }}>{a.title}</span>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-[10px] uppercase px-2 py-0.5 rounded-full" style={{ background: a.kind === "quiz" ? "#FEF3C7" : "#DBEAFE", color: "#374151" }}>{a.kind}</span>
+                {a.cohort && a.cohort !== "all" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{a.cohort}</span>}
                 <button onClick={() => openEdit(a)} className="text-xs" style={{ color: NAVY }}>Edit</button>
                 <button onClick={() => setDelItem(a)} className="text-xs text-red-500">Delete</button>
               </div>
@@ -1270,6 +1325,16 @@ function LecturerAssignments({ myCourses, items, submissions }) {
             <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Instructions"><textarea rows={3} className={inputCls} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Due date"><input type="date" className={inputCls} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></Field>
+            <Field label="Visible to">
+              <select className={inputCls} value={form.cohort === "all" ? "all" : "custom"} onChange={(e) => setForm({ ...form, cohort: e.target.value === "all" ? "all" : "" })}>
+                <option value="all">All students in this course</option>
+                <option value="custom">Just one group…</option>
+              </select>
+              {form.cohort !== "all" && (
+                <input className={inputCls + " mt-2"} list="cohort-suggestions" placeholder="e.g. 1 Year, 2 Years, 6 Months"
+                  value={form.cohort} onChange={(e) => setForm({ ...form, cohort: e.target.value })} />
+              )}
+            </Field>
             <Field label="Attach PDF (question paper, optional)">
               <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files[0])} />
               {editItem && editItem.attachmentName && !file && <p className="text-xs text-gray-400 mt-1">Current file: {editItem.attachmentName} (choosing a new one replaces it)</p>}
@@ -1308,7 +1373,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
 
 function LecturerNotes({ myCourses, notes }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ courseId: "", title: "" });
+  const [form, setForm] = useState({ courseId: "", title: "", cohort: "all" });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -1322,7 +1387,7 @@ function LecturerNotes({ myCourses, notes }) {
       const path = `notes/${form.courseId}/${Date.now()}-${file.name}`;
       const url = await FB().uploadFile(path, file);
       await FB().addDoc("notes", { ...form, fileURL: url, fileName: file.name, storagePath: path, uploadedAt: FB().serverTimestamp() });
-      setShowAdd(false); setForm({ courseId: "", title: "" }); setFile(null);
+      setShowAdd(false); setForm({ courseId: "", title: "", cohort: "all" }); setFile(null);
     } catch (e2) {
       setErr(e2.message || "Upload failed. Please try again.");
     } finally { setBusy(false); }
@@ -1337,7 +1402,7 @@ function LecturerNotes({ myCourses, notes }) {
       <div className="space-y-2">
         {notes.map((n) => (
           <div key={n.id} className="bg-white rounded-xl border p-3 flex justify-between items-center">
-            <span className="text-sm">{n.title} <span className="text-xs text-gray-400">({n.fileName})</span></span>
+            <span className="text-sm">{n.title} <span className="text-xs text-gray-400">({n.fileName})</span>{n.cohort && n.cohort !== "all" && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{n.cohort}</span>}</span>
             <a href={n.fileURL} target="_blank" rel="noreferrer" className="text-xs" style={{ color: NAVY }}>Download</a>
           </div>
         ))}
@@ -1353,6 +1418,16 @@ function LecturerNotes({ myCourses, notes }) {
               </select>
             </Field>
             <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+            <Field label="Visible to">
+              <select className={inputCls} value={form.cohort === "all" ? "all" : "custom"} onChange={(e) => setForm({ ...form, cohort: e.target.value === "all" ? "all" : "" })}>
+                <option value="all">All students in this course</option>
+                <option value="custom">Just one group…</option>
+              </select>
+              {form.cohort !== "all" && (
+                <input className={inputCls + " mt-2"} list="cohort-suggestions" placeholder="e.g. 1 Year, 2 Years, 6 Months"
+                  value={form.cohort} onChange={(e) => setForm({ ...form, cohort: e.target.value })} />
+              )}
+            </Field>
             <Field label="File">
               <input type="file" onChange={(e) => setFile(e.target.files[0])} />
               {file && <p className="text-xs text-green-600 mt-1">Selected: {file.name}</p>}
@@ -1530,6 +1605,7 @@ function StudentWork({ items, submissions, currentUser }) {
             <div className="flex justify-between">
               <span className="font-serif font-semibold" style={{ color: NAVY }}>{a.title}</span>
               <span className="text-[10px] uppercase px-2 py-0.5 rounded-full" style={{ background: a.kind === "quiz" ? "#FEF3C7" : "#DBEAFE", color: "#374151" }}>{a.kind}</span>
+                {a.cohort && a.cohort !== "all" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{a.cohort}</span>}
             </div>
             <p className="text-sm text-gray-600 mt-1">{a.description}</p>
             {a.dueDate && <p className="text-xs text-gray-400 mt-1">Due {a.dueDate}</p>}
@@ -1648,12 +1724,12 @@ function Dashboard({ user }) {
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost postScope="choose" currentUser={user} />;
   } else if (user.role === "student") {
     const myFee = fees.find((f) => f.id === user.uid) || null;
-    if (page === "overview") content = <StudentCourses myCourses={myCourses} programme={programmes.find((p) => p.id === user.programmeId)} notes={notes.filter((n) => myCourseIds.has(n.courseId))} assignments={assignments.filter((a) => myCourseIds.has(a.courseId))} liveClasses={liveClasses.filter((c) => myCourseIds.has(c.courseId))} results={results.filter((r) => r.studentId === user.uid)} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
-    if (page === "work") content = <StudentWork items={assignments.filter((a) => myCourseIds.has(a.courseId))} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
+    if (page === "overview") content = <StudentCourses myCourses={myCourses} programme={programmes.find((p) => p.id === user.programmeId)} notes={notes.filter((n) => myCourseIds.has(n.courseId) && visibleToCohort(n, myCourses.find((c) => c.id === n.courseId), user.uid))} assignments={assignments.filter((a) => myCourseIds.has(a.courseId) && visibleToCohort(a, myCourses.find((c) => c.id === a.courseId), user.uid))} liveClasses={liveClasses.filter((c) => myCourseIds.has(c.courseId) && visibleToCohort(c, myCourses.find((x) => x.id === c.courseId), user.uid))} results={results.filter((r) => r.studentId === user.uid)} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
+    if (page === "work") content = <StudentWork items={assignments.filter((a) => myCourseIds.has(a.courseId) && visibleToCohort(a, myCourses.find((c) => c.id === a.courseId), user.uid))} submissions={submissions.filter((s) => s.studentId === user.uid)} currentUser={user} />;
     if (page === "results") content = <ResultsTable results={results.filter((r) => r.studentId === user.uid)} />;
-    if (page === "notes") content = <StudentNotes notes={notes.filter((n) => myCourseIds.has(n.courseId))} />;
+    if (page === "notes") content = <StudentNotes notes={notes.filter((n) => myCourseIds.has(n.courseId) && visibleToCohort(n, myCourses.find((c) => c.id === n.courseId), user.uid))} />;
     if (page === "fees") content = <StudentFees fee={myFee} />;
-    if (page === "liveclasses") content = <StudentLiveClasses classes={liveClasses.filter((c) => myCourseIds.has(c.courseId))} />;
+    if (page === "liveclasses") content = <StudentLiveClasses classes={liveClasses.filter((c) => myCourseIds.has(c.courseId) && visibleToCohort(c, myCourses.find((x) => x.id === c.courseId), user.uid))} />;
     if (page === "announcements") content = <AnnouncementsBoard announcements={announcements.filter((a) => a.courseId === "all" || myCourseIds.has(a.courseId))} courses={myCourses} canPost={false} currentUser={user} />;
   } else if (user.role === "bursar") {
     if (page === "fees") content = <FeesPage fees={fees} />;
