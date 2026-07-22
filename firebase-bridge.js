@@ -14,7 +14,7 @@ import {
   collection, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion, arrayRemove,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
+  getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const app = initializeApp(window.FIREBASE_CONFIG);
@@ -144,10 +144,33 @@ const FirebaseAPI = {
   },
 
   // ---------------- STORAGE ----------------
-  async uploadFile(path, file) {
-    const r = ref(storage, path);
-    await uploadBytes(r, file);
-    return getDownloadURL(r);
+  // onProgress(percent) is called repeatedly during upload if provided.
+  // Fails with a clear error after 3 minutes of no progress, instead of hanging forever.
+  uploadFile(path, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const r = ref(storage, path);
+      const task = uploadBytesResumable(r, file);
+      let lastProgressAt = Date.now();
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastProgressAt > 180000) {
+          clearInterval(watchdog);
+          task.cancel();
+          reject(new Error("Upload stalled (no progress for 3 minutes) — check your internet connection and try again, or try a smaller file."));
+        }
+      }, 5000);
+      task.on(
+        "state_changed",
+        (snap) => {
+          lastProgressAt = Date.now();
+          if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+        },
+        (err) => { clearInterval(watchdog); reject(err); },
+        async () => {
+          clearInterval(watchdog);
+          try { resolve(await getDownloadURL(r)); } catch (err) { reject(err); }
+        }
+      );
+    });
   },
   async deleteFile(path) {
     try { await deleteObject(ref(storage, path)); } catch (e) { /* ignore if missing */ }

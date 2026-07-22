@@ -16,6 +16,33 @@ function visibleToCohort(item, course, uid) {
   return item.cohort === myCohort;
 }
 
+// Resizes/compresses an image client-side before upload — big win on slow connections.
+function compressImage(file, maxDim = 800, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) return resolve(file);
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale); height = Math.round(height * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) return resolve(file);
+        resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+      }, "image/jpeg", quality);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
 }
@@ -131,6 +158,7 @@ function LoginScreen() {
 // -------------------------------------------------------------- Shell -----
 function ProfileModal({ user, onClose }) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [err, setErr] = useState("");
   const fileRef = useRef();
 
@@ -143,15 +171,16 @@ function ProfileModal({ user, onClose }) {
   async function pickPhoto(e) {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setErr("Please choose an image under 2MB."); return; }
-    setBusy(true); setErr("");
+    if (file.size > 8 * 1024 * 1024) { setErr("Please choose an image under 8MB."); return; }
+    setBusy(true); setErr(""); setProgress(0);
     try {
-      const url = await FB().uploadFile(`profile-photos/${user.uid}`, file);
+      const compressed = await compressImage(file, 500, 0.75);
+      const url = await FB().uploadFile(`profile-photos/${user.uid}`, compressed, setProgress);
       await FB().setDoc(`users/${user.uid}`, { photoURL: url });
     } catch (e2) {
       setErr(e2.message);
     } finally {
-      setBusy(false);
+      setBusy(false); setProgress(0);
     }
   }
 
@@ -177,7 +206,7 @@ function ProfileModal({ user, onClose }) {
       <div className="flex flex-col items-center gap-3 mb-4">
         <Avatar user={user} size={84} />
         <button disabled={busy} onClick={() => fileRef.current.click()} className="text-sm px-4 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50">
-          {busy ? "Uploading…" : "Change photo"}
+          {busy ? `Uploading… ${progress}%` : "Change photo"}
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
         {err && <p className="text-xs text-red-600">{err}</p>}
@@ -276,7 +305,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.2</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.3</p>
         </div>
       </aside>
 
@@ -1236,6 +1265,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
   const [form, setForm] = useState({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all" });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [err, setErr] = useState("");
 
   function openAdd() {
@@ -1253,12 +1283,12 @@ function LecturerAssignments({ myCourses, items, submissions }) {
 
   async function save(e) {
     e.preventDefault();
-    setErr(""); setBusy(true);
+    setErr(""); setBusy(true); setProgress(0);
     try {
       let attachment = editItem ? { attachmentURL: editItem.attachmentURL || null, attachmentName: editItem.attachmentName || null } : {};
       if (file) {
         const path = `assignment-files/${form.courseId}/${Date.now()}-${file.name}`;
-        const url = await FB().uploadFile(path, file);
+        const url = await FB().uploadFile(path, file, setProgress);
         attachment = { attachmentURL: url, attachmentName: file.name };
       }
       if (editItem) {
@@ -1270,7 +1300,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
     } catch (e2) {
       setErr(e2.message || "Could not save. Please try again.");
     } finally {
-      setBusy(false);
+      setBusy(false); setProgress(0);
     }
   }
 
@@ -1341,7 +1371,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
               {file && <p className="text-xs text-green-600 mt-1">Selected: {file.name}</p>}
             </Field>
             {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>{busy ? "Saving…" : editItem ? "Save changes" : "Post"}</button>
+            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>{busy ? (file ? `Uploading… ${progress}%` : "Saving…") : editItem ? "Save changes" : "Post"}</button>
           </form>
         </Modal>
       )}
@@ -1376,21 +1406,22 @@ function LecturerNotes({ myCourses, notes }) {
   const [form, setForm] = useState({ courseId: "", title: "", cohort: "all" });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [err, setErr] = useState("");
 
   async function add(e) {
     e.preventDefault();
     setErr("");
     if (!file) { setErr("Please choose a file first — tap \"Choose file\" below and pick a document from your phone."); return; }
-    setBusy(true);
+    setBusy(true); setProgress(0);
     try {
       const path = `notes/${form.courseId}/${Date.now()}-${file.name}`;
-      const url = await FB().uploadFile(path, file);
+      const url = await FB().uploadFile(path, file, setProgress);
       await FB().addDoc("notes", { ...form, fileURL: url, fileName: file.name, storagePath: path, uploadedAt: FB().serverTimestamp() });
       setShowAdd(false); setForm({ courseId: "", title: "", cohort: "all" }); setFile(null);
     } catch (e2) {
       setErr(e2.message || "Upload failed. Please try again.");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setProgress(0); }
   }
 
   return (
@@ -1433,7 +1464,7 @@ function LecturerNotes({ myCourses, notes }) {
               {file && <p className="text-xs text-green-600 mt-1">Selected: {file.name}</p>}
             </Field>
             {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>{busy ? "Uploading…" : "Upload"}</button>
+            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>{busy ? `Uploading… ${progress}%` : "Upload"}</button>
           </form>
 
         </Modal>
@@ -1571,16 +1602,17 @@ function StudentCourses({ myCourses, programme, notes, assignments, liveClasses,
 function StudentWork({ items, submissions, currentUser }) {
   const [uploadingFor, setUploadingFor] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [progress, setProgress] = useState(0);
   const [err, setErr] = useState("");
 
   const mySubmission = (assignmentId) => submissions.find((s) => s.assignmentId === assignmentId && s.studentId === currentUser.uid);
 
   async function submitAnswer(a, file) {
     if (!file) return;
-    setBusyId(a.id); setErr("");
+    setBusyId(a.id); setErr(""); setProgress(0);
     try {
       const path = `submissions/${a.id}/${currentUser.uid}-${Date.now()}-${file.name}`;
-      const url = await FB().uploadFile(path, file);
+      const url = await FB().uploadFile(path, file, setProgress);
       const existing = mySubmission(a.id);
       const data = {
         assignmentId: a.id, courseId: a.courseId, studentId: currentUser.uid, studentName: currentUser.name,
@@ -1592,7 +1624,7 @@ function StudentWork({ items, submissions, currentUser }) {
     } catch (e2) {
       setErr(e2.message || "Could not upload your answer. Please try again.");
     } finally {
-      setBusyId(null);
+      setBusyId(null); setProgress(0);
     }
   }
 
@@ -1624,7 +1656,7 @@ function StudentWork({ items, submissions, currentUser }) {
               ) : uploadingFor === a.id ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />
-                  {busyId === a.id && <span className="text-xs text-gray-400">Uploading…</span>}
+                  {busyId === a.id && <span className="text-xs text-gray-400">Uploading… {progress}%</span>}
                 </div>
               ) : (
                 <button onClick={() => setUploadingFor(a.id)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>Upload your answer</button>
