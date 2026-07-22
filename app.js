@@ -61,8 +61,8 @@ function ConfirmModal({ title, body, onYes, onNo }) {
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className={cx("bg-white rounded-xl w-full p-6 shadow-xl max-h-[85vh] overflow-y-auto", wide ? "max-w-2xl" : "max-w-md")}>
+    <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto p-4 flex items-start justify-center">
+      <div className={cx("bg-white rounded-xl w-full p-6 shadow-xl my-6", wide ? "max-w-2xl" : "max-w-md")}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-serif text-lg font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
@@ -276,7 +276,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.1</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.2</p>
         </div>
       </aside>
 
@@ -1341,7 +1341,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
               {file && <p className="text-xs text-green-600 mt-1">Selected: {file.name}</p>}
             </Field>
             {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium">{busy ? "Saving…" : editItem ? "Save changes" : "Post"}</button>
+            <button disabled={busy} className="w-full py-2.5 rounded-lg text-white font-medium" style={{ background: NAVY }}>{busy ? "Saving…" : editItem ? "Save changes" : "Post"}</button>
           </form>
         </Modal>
       )}
