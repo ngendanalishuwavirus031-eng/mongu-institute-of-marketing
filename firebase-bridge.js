@@ -145,17 +145,17 @@ const FirebaseAPI = {
 
   // ---------------- STORAGE ----------------
   // onProgress(percent) is called repeatedly during upload if provided.
-  // Fails with a clear error after 3 minutes of no progress, instead of hanging forever.
+  // Fails with a clear error after 40 seconds of no progress, instead of hanging forever.
   uploadFile(path, file, onProgress) {
     return new Promise((resolve, reject) => {
       const r = ref(storage, path);
       const task = uploadBytesResumable(r, file);
       let lastProgressAt = Date.now();
       const watchdog = setInterval(() => {
-        if (Date.now() - lastProgressAt > 180000) {
+        if (Date.now() - lastProgressAt > 40000) {
           clearInterval(watchdog);
           task.cancel();
-          reject(new Error("Upload stalled (no progress for 3 minutes) — check your internet connection and try again, or try a smaller file."));
+          reject(new Error("Upload stalled — no data moved for 40 seconds. Your device shows 0.00 KB/s, which usually means there's no working internet connection right now. Check your WiFi/mobile data and try again."));
         }
       }, 5000);
       task.on(

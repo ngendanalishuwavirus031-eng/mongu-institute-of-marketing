@@ -305,7 +305,7 @@ function Shell({ user, page, setPage, children }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <button onClick={() => setConfirmOut(true)} className="w-full text-left text-sm text-white/80 hover:text-white">Sign out</button>
-          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.3</p>
+          <p className="text-center text-[10px] text-white/25 mt-3">MIM Portal · Build 2026-07-19.4</p>
         </div>
       </aside>
 
@@ -1262,7 +1262,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
   const [editItem, setEditItem] = useState(null);
   const [delItem, setDelItem] = useState(null);
   const [viewSubsFor, setViewSubsFor] = useState(null);
-  const [form, setForm] = useState({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all" });
+  const [form, setForm] = useState({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all", timeLimitMinutes: "" });
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -1270,13 +1270,13 @@ function LecturerAssignments({ myCourses, items, submissions }) {
 
   function openAdd() {
     setEditItem(null);
-    setForm({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all" });
+    setForm({ courseId: "", kind: "assignment", title: "", description: "", dueDate: "", cohort: "all", timeLimitMinutes: "" });
     setFile(null); setErr("");
     setShowAdd(true);
   }
   function openEdit(a) {
     setEditItem(a);
-    setForm({ courseId: a.courseId, kind: a.kind, title: a.title, description: a.description || "", dueDate: a.dueDate || "", cohort: a.cohort || "all" });
+    setForm({ courseId: a.courseId, kind: a.kind, title: a.title, description: a.description || "", dueDate: a.dueDate || "", cohort: a.cohort || "all", timeLimitMinutes: a.timeLimitMinutes || "" });
     setFile(null); setErr("");
     setShowAdd(true);
   }
@@ -1291,10 +1291,11 @@ function LecturerAssignments({ myCourses, items, submissions }) {
         const url = await FB().uploadFile(path, file, setProgress);
         attachment = { attachmentURL: url, attachmentName: file.name };
       }
+      const data = { ...form, timeLimitMinutes: form.timeLimitMinutes ? Number(form.timeLimitMinutes) : null, ...attachment };
       if (editItem) {
-        await FB().updateDoc(`assignments/${editItem.id}`, { ...form, ...attachment });
+        await FB().updateDoc(`assignments/${editItem.id}`, data);
       } else {
-        await FB().addDoc("assignments", { ...form, ...attachment, createdAt: FB().serverTimestamp() });
+        await FB().addDoc("assignments", { ...data, createdAt: FB().serverTimestamp() });
       }
       setShowAdd(false);
     } catch (e2) {
@@ -1324,6 +1325,7 @@ function LecturerAssignments({ myCourses, items, submissions }) {
             </div>
             <p className="text-sm text-gray-600 mt-1">{a.description}</p>
             {a.dueDate && <p className="text-xs text-gray-400 mt-1">Due {a.dueDate}</p>}
+            {a.timeLimitMinutes && <p className="text-xs text-gray-400">⏱️ Time limit: {a.timeLimitMinutes} min</p>}
             {a.attachmentURL && (
               <a href={a.attachmentURL} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
                 📄 {a.attachmentName || "Download attachment"}
@@ -1355,6 +1357,10 @@ function LecturerAssignments({ myCourses, items, submissions }) {
             <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Instructions"><textarea rows={3} className={inputCls} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Due date"><input type="date" className={inputCls} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></Field>
+            <Field label="Time limit in minutes (optional — for a timed quiz/test)">
+              <input type="number" min="1" placeholder="e.g. 30" className={inputCls} value={form.timeLimitMinutes} onChange={(e) => setForm({ ...form, timeLimitMinutes: e.target.value })} />
+              <p className="text-[11px] text-gray-400 mt-1">Leave blank for no time limit. If set, the student's countdown starts the moment they tap "Start."</p>
+            </Field>
             <Field label="Visible to">
               <select className={inputCls} value={form.cohort === "all" ? "all" : "custom"} onChange={(e) => setForm({ ...form, cohort: e.target.value === "all" ? "all" : "" })}>
                 <option value="all">All students in this course</option>
@@ -1599,13 +1605,47 @@ function StudentCourses({ myCourses, programme, notes, assignments, liveClasses,
   );
 }
 
+const EDIT_WINDOW_MS = 5 * 60 * 1000;
+
+function tsToMillis(ts) {
+  if (!ts) return null;
+  if (typeof ts.toMillis === "function") return ts.toMillis();
+  if (typeof ts === "string") return new Date(ts).getTime();
+  if (ts instanceof Date) return ts.getTime();
+  return Date.now(); // pending server timestamp — treat as "just now"
+}
+
+function fmtCountdown(ms) {
+  if (ms <= 0) return "0:00";
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function StudentWork({ items, submissions, currentUser }) {
   const [uploadingFor, setUploadingFor] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [progress, setProgress] = useState(0);
   const [err, setErr] = useState("");
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const mySubmission = (assignmentId) => submissions.find((s) => s.assignmentId === assignmentId && s.studentId === currentUser.uid);
+
+  async function startTimer(a) {
+    const existing = mySubmission(a.id);
+    const data = {
+      assignmentId: a.id, courseId: a.courseId, studentId: currentUser.uid, studentName: currentUser.name,
+      startedAt: new Date().toISOString(),
+    };
+    if (existing) await FB().updateDoc(`submissions/${existing.id}`, data);
+    else await FB().addDoc("submissions", data);
+  }
 
   async function submitAnswer(a, file) {
     if (!file) return;
@@ -1632,6 +1672,14 @@ function StudentWork({ items, submissions, currentUser }) {
     <div className="space-y-3">
       {items.map((a) => {
         const sub = mySubmission(a.id);
+        const hasTimeLimit = !!a.timeLimitMinutes;
+        const started = sub && sub.startedAt;
+        const remainingMs = hasTimeLimit && started ? (tsToMillis(sub.startedAt) + a.timeLimitMinutes * 60000 - now) : null;
+        const timeExpired = remainingMs !== null && remainingMs <= 0 && !sub?.fileURL;
+        const submitted = !!(sub && sub.fileURL);
+        const editRemainingMs = submitted ? (tsToMillis(sub.submittedAt) + EDIT_WINDOW_MS - now) : null;
+        const editLocked = submitted && editRemainingMs !== null && editRemainingMs <= 0;
+
         return (
           <div key={a.id} className="bg-white rounded-xl border p-4">
             <div className="flex justify-between">
@@ -1641,25 +1689,51 @@ function StudentWork({ items, submissions, currentUser }) {
             </div>
             <p className="text-sm text-gray-600 mt-1">{a.description}</p>
             {a.dueDate && <p className="text-xs text-gray-400 mt-1">Due {a.dueDate}</p>}
+            {a.timeLimitMinutes && <p className="text-xs text-gray-400">⏱️ Time limit: {a.timeLimitMinutes} min</p>}
             {a.attachmentURL && (
               <a href={a.attachmentURL} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: NAVY, color: NAVY }}>
                 📄 {a.attachmentName || "Download question paper"}
               </a>
             )}
             <div className="mt-3 pt-3 border-t">
-              {sub ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600">Submitted: {sub.fileName}</span>
-                  <button onClick={() => setUploadingFor(a.id)} className="text-xs" style={{ color: NAVY }}>Replace answer</button>
-                  {uploadingFor === a.id && <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />}
+              {hasTimeLimit && !started && !submitted && (
+                <button onClick={() => startTimer(a)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>
+                  Start ({a.timeLimitMinutes} min timer)
+                </button>
+              )}
+
+              {hasTimeLimit && started && !submitted && !timeExpired && (
+                <div className="mb-2">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">⏱️ Time left: {fmtCountdown(remainingMs)}</span>
                 </div>
-              ) : uploadingFor === a.id ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />
-                  {busyId === a.id && <span className="text-xs text-gray-400">Uploading… {progress}%</span>}
-                </div>
-              ) : (
-                <button onClick={() => setUploadingFor(a.id)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>Upload your answer</button>
+              )}
+
+              {timeExpired && (
+                <p className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 inline-block">Time's up — you can no longer submit this.</p>
+              )}
+
+              {!timeExpired && (!hasTimeLimit || started) && (
+                submitted ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600">Submitted: {sub.fileName}</span>
+                    {editLocked ? (
+                      <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">🔒 Locked — editing window closed</span>
+                    ) : (
+                      <>
+                        <span className="text-gray-400">Edit window: {fmtCountdown(editRemainingMs)}</span>
+                        <button onClick={() => setUploadingFor(a.id)} className="text-xs" style={{ color: NAVY }}>Replace answer</button>
+                        {uploadingFor === a.id && <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />}
+                      </>
+                    )}
+                  </div>
+                ) : uploadingFor === a.id ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input type="file" onChange={(e) => submitAnswer(a, e.target.files[0])} />
+                    {busyId === a.id && <span className="text-xs text-gray-400">Uploading… {progress}%</span>}
+                  </div>
+                ) : (
+                  <button onClick={() => setUploadingFor(a.id)} className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: NAVY }}>Upload your answer</button>
+                )
               )}
               {err && uploadingFor === a.id && <p className="text-xs text-red-600 mt-1">{err}</p>}
             </div>
